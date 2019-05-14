@@ -2,7 +2,6 @@
 #'
 #' Current limitations:
 #' @importFrom R6 R6Class
-#' @importFrom tmle3 tmle3_Spec Param_delta
 #'
 #' @export
 #
