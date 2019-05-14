@@ -11,6 +11,7 @@ tmle3_Spec_vimPAR <- R6Class(
   portable = TRUE,
   class = TRUE,
   inherit = tmle3_Spec,
+  public = list(
     make_tmle_task = function(data, node_list, ...) {
        # bound Y if continuous
       Y_node <- node_list$Y
@@ -87,14 +88,12 @@ tmle3_Spec_vimPAR <- R6Class(
   private = list()
 )
 
-#' Risk Measures for Binary Outcomes
-#'
-#' Estimates TSMs, RRs, PAR, and PAF
+#' Estimates PAR using TSM and observed mean
 #'
 #' O=(W,A,Y)
 #' W=Covariates
-#' A=Treatment (binary or categorical)
-#' Y=Outcome binary
+#' A=Variables to Consider for VIM
+#' Y=Outcome
 #' @importFrom sl3 make_learner Lrnr_mean
 #' @export
 tmle_vimPAR <- function() {
