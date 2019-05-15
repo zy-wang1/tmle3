@@ -21,7 +21,7 @@ utils::globalVariables(c(
 tmle3_vimPAR <- function(tmle_spec, data, node_list, learner_list = NULL,
                       adjust_for_other_A = TRUE) {
 
-  A_nodes <- unique(A_nodes)
+  A_nodes <- node_list$A
   vim_A <- A_nodes[[1]]
 
   all_estimates <- foreach::foreach(vim_A = A_nodes) %do% {
@@ -48,8 +48,6 @@ tmle3_vimPAR <- function(tmle_spec, data, node_list, learner_list = NULL,
   # TODO: think about VIM parameters where H0 is something other than 0
   vim_results[, p_nz := stats::pnorm(-1 * abs(Z_stat))]
   vim_results[, p_nz_corrected := p.adjust(p_nz, method = "BH")]
-  vim_results <- vim_results[order(p_nz_corrected)]
-  vim_results <- vim_results[, A := factor(A, levels = A)]
   return(vim_results)
 }
 
@@ -73,6 +71,6 @@ plot_vim <- function(vim_results) {
     geom_errorbarh() +
     theme_bw() +
     xlab("Importance Measure") + ylab("Variable") +
-    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5) +
-    scale_y_discrete(limits = rev(levels(vim_results$A)))
+    geom_vline(xintercept = 0, linetype = "dashed", alpha = 0.5)
+    # + scale_y_discrete(limits = rev(levels(vim_results$A)))
 }
