@@ -56,12 +56,24 @@ tmle3_Node <- R6Class(
   class = TRUE,
   public = list(
     initialize = function(name, variables, parents = c(),
+                              time = 0, group = NULL,
                               variable_type = NULL, censoring_node = NULL, scale = FALSE) {
       private$.name <- name
+      
+      ltmle_format <- "[[:alnum:]]+_[[:digit:]]+"
+      
+      if(grepl(ltmle_format, name)){
+        parsed <- strsplit(name, "_")[[1]]
+        group <- parsed[[1]]
+        time <- as.numeric(parsed[[2]])
+      }
+      
       private$.variables <- variables
       private$.parents <- parents
       private$.variable_type <- variable_type
       private$.scale <- scale
+      private$.group <- group
+      private$.time <- time
       private$.censoring_node <- censoring_node
       
     },
@@ -94,6 +106,12 @@ tmle3_Node <- R6Class(
     scale = function() {
       return(private$.scale)
     },
+    time = function() {
+      return(private$.time)
+    },
+    group = function() {
+      return(private$.group)
+    },
     variable_type = function(new_variable_type = NULL) {
       if (!is.null(new_variable_type)) {
         private$.variable_type <- new_variable_type
@@ -107,7 +125,9 @@ tmle3_Node <- R6Class(
     .censoring_node = NULL,
     .parents = NULL,
     .variable_type = NULL,
-    .scale = NULL
+    .scale = NULL,
+    .time = NULL,
+    .group = NULL
   )
 )
 

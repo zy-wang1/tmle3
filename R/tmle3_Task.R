@@ -126,14 +126,23 @@ tmle3_Task <- R6Class(
       
 
     },
-    get_tmle_node = function(node_name, format = FALSE, impute_censoring = FALSE) {
-  
-      cache_key <- sprintf("%s_%s_%s", node_name, format, impute_censoring)
-
+    get_tmle_node = function(node_spec, format = FALSE, impute_censoring = FALSE) {
+      if(is.list(node_spec)){
+        node_name <- node_spec$name
+        lag <- node_spec$lag
+      } else{
+        node_name <- node_spec
+        lag <- 0
+      }
+      
+      # check for cached version
+      cache_key <- sprintf("%s_%s_%s_%s", node_name, format, impute_censoring, lag)
       cached_data <- get0(cache_key, private$.node_cache, inherits = FALSE)
       if (!is.null(cached_data)) {
         return(cached_data)
       }
+      
+      # extract data
       tmle_node <- self$npsem[[node_name]]
       node_var <- tmle_node$variables
       if (is.null(node_var)) {
@@ -143,10 +152,34 @@ tmle3_Task <- R6Class(
       node_type <- tmle_node$node_type
       data <- self$get_data(self$row_index, node_var)
 
+      # lag data if appropriate
+      if(lag!=0){
+        if(lag>0){
+          stop("lag must be <=0 to preserve time ordering")
+        }
+        
+        # get ids and times
+        ids <- self$get_node("id")
+        times <- self$get_node("time")
+        lagged_times <- times - lag
+        
+        
+        # lag data
+        set(data,,"__id", ids)
+        set(data,,"__time", lagged_times)
+        time_dt <- data.table(ids, times)
+        setnames(time_dt,names(time_dt),c("__id","__time"))
+        lagged <- merge(time_dt, data, all.x=TRUE, by = c("__id","__time"))
+        data <- subset(lagged, select=node_var)
+        node_var <- sprintf("%s_t%s",node_var,lag)
+        setnames(data, names(data), node_var)
+      }
+      
       if ((ncol(data) == 1)) {
         data <- unlist(data, use.names = FALSE)
       }
 
+      # format data if appropriate
       if (format == TRUE) {
         var_type <- tmle_node$variable_type
         data <- var_type$format(data)
@@ -154,6 +187,9 @@ tmle3_Task <- R6Class(
         data <- data.table(data)
         setnames(data, node_var)
       }
+      
+
+      
 
       censoring_node <- tmle_node$censoring_node
       
@@ -172,6 +208,7 @@ tmle3_Task <- R6Class(
         }
       }
       
+
       
 
       assign(cache_key, data, private$.node_cache)
@@ -182,13 +219,13 @@ tmle3_Task <- R6Class(
       npsem <- self$npsem
       target_node_object <- npsem[[target_node]]
       parent_names <- target_node_object$parents
-      parent_nodes <- npsem[parent_names]
+      #parent_nodes <- npsem[parent_names]
 
       outcome_data <- self$get_tmle_node(target_node, format = TRUE)
       all_covariate_data <- lapply(parent_names, self$get_tmle_node, format = TRUE)
 
-      outcome <- target_node_object$variables
-      covariates <- unlist(lapply(parent_nodes, `[[`, "variables"))
+      outcome <- names(outcome_data)#target_node_object$variables
+      covariates <- unlist(lapply(all_covariate_data, names))
 
 
 
