@@ -23,6 +23,17 @@ tmle3_Spec_middle <- R6Class(
       tmle_task <- middle_task(data, node_list, variable_types)
       return(tmle_task)
     },
+    make_initial_likelihood = function(tmle_task, learner_list = NULL) {
+      # produce trained likelihood when likelihood_def provided
+
+      if (!is.null(self$options$likelihood_override)) {
+        likelihood <- self$options$likelihood_override$train(tmle_task)
+      } else {
+        likelihood <- middle_likelihood(tmle_task, learner_list)  # see middle_helper
+      }
+
+      return(likelihood)
+    },
     make_params = function(tmle_task, likelihood) {
       temp_names <- names(tmle_task$npsem)
       loc_A <- grep("A", temp_names)

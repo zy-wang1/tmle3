@@ -82,6 +82,9 @@ Param_middle <- R6Class(
         # get list of all possible predicted lkds
         obs_data <- tmle_task$data
         obs_variable_names <- colnames(obs_data)
+        # ZW todo: to handle long format and wide format
+        temp_to_drop <- which(obs_variable_names %in% c("id", "t"))
+        obs_variable_names <- obs_variable_names[-temp_to_drop]
         # ZW todo: see if observed_likelihood needs to change to targeted likelihood
         private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
         if (!is.null(private$.list_all_predicted_lkd)) {
@@ -93,7 +96,7 @@ Param_middle <- R6Class(
               current_variable <- tmle_task$npsem[[loc_node]]$variables
               temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
               temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-              temp_output <- self$observed_likelihood$factor_list[[loc_node]]$get_likelihood(temp_task, fold_number = "full")  # corresponding outputs
+              temp_output <- self$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
               data.frame(temp_input, output = temp_output) %>% return
             }
           })
@@ -158,6 +161,9 @@ Param_middle <- R6Class(
       # get list of all possible predicted lkds
       obs_data <- tmle_task$data
       obs_variable_names <- colnames(obs_data)
+      # ZW todo: to handle long format and wide format
+      temp_to_drop <- which(obs_variable_names %in% c("id", "t"))
+      obs_variable_names <- obs_variable_names[-temp_to_drop]
 
       private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
       # only calculate list of lkd here when it is null; otherwise only update it in updater$apply_update_all
@@ -170,7 +176,7 @@ Param_middle <- R6Class(
             current_variable <- tmle_task$npsem[[loc_node]]$variables
             temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
             temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-            temp_output <- self$observed_likelihood$factor_list[[loc_node]]$get_likelihood(temp_task, fold_number = "full")  # corresponding outputs
+            temp_output <- self$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
             data.frame(temp_input, output = temp_output) %>% return
           }
         })

@@ -42,43 +42,86 @@ Targeted_Likelihood <- R6Class(
 
       super$initialize(params)
     },
-    update = function(new_epsilon, step_number, fold_number = "full", update_node) {
+    update = function(new_epsilon, step_number, fold_number = "full", update_node = NULL) {
 
       # todo: rethink which tasks need updates here
       # tasks_at_step <- self$cache$tasks_at_step(step_number)
       tasks_at_step <- self$cache$tasks
-      # If task has attr target_nodes then only update these nodes.
-      to_update <- sapply(tasks_at_step, function(task) {
-        target_nodes <- attr(task, "target_nodes")
-        if(is.null(target_nodes)){
-          return(T)
+      tasks_at_step <- tasks_at_step[map_dbl(tasks_at_step, ~nrow(.x$data)) == nrow(self$training_task$data)]
+
+
+
+      if (!inherits(self$updater, "tmle3_Update_middle")  ) {
+        # the default version
+        # If task has attr target_nodes then only update these nodes.
+        to_update <- sapply(tasks_at_step, function(task) {
+          target_nodes <- attr(task, "target_nodes")
+          if(is.null(target_nodes)){
+            return(T)
+          }
+          if(update_node %in% c(target_nodes)){
+            return(T)
+          }
+          return(F)
+        })
+
+        tasks_at_step <- tasks_at_step[to_update]
+        # first, calculate all updates
+        task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon, update_node)
+
+        # then, store all updates
+        for (task_index in seq_along(tasks_at_step)) {
+          task <- tasks_at_step[[task_index]]
+          updated_values <- task_updates[[task_index]]
+
+          likelihood_factor <- self$factor_list[[update_node]]
+          self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values, node = update_node)
         }
-        if(update_node %in% c(target_nodes)){
-          return(T)
+        # for (task in tasks_at_step) {
+        #   all_submodels <- self$updater$generate_submodel_data(self, task, fold_number)
+        #   updated_values <- self$updater$apply_submodels(all_submodels, new_epsilons)
+        #   for (node in names(updated_values)) {
+        #     likelihood_factor <- self$factor_list[[node]]
+        #     self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
+        #   }
+        # }
+      } else if (self$updater$submodel_type == "onestep") {  # for tmle3_Update_middle
+        # first, calculate all updates
+        task_updates <- lapply(tasks_at_step, self$updater$apply_update_onestep, self, fold_number, self$updater$d_epsilon)  # this returns updated (obs) lkd
+
+        # then, store all updates
+        for (task_index in seq_along(tasks_at_step)) {
+          task <- tasks_at_step[[task_index]]
+          updated_values <- task_updates[[task_index]]
+          for (node in names(updated_values)) {
+            likelihood_factor <- self$factor_list[[node]]
+            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
+          }
         }
-        return(F)
-      })
 
-      tasks_at_step <- tasks_at_step[to_update]
-      # first, calculate all updates
-      task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon, update_node)
+        update_nodes <- self$updater$update_nodes
+        full_updates <- self$updater$apply_update_full_onestep(self$training_task, self, fold_number, self$updater$d_epsilon)  # this returns updated (full) lkd
+        for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
+      } else
+        # if (self$updater$submodel_type == "logistic")
+        {
+        # first, calculate all updates
+        task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon)  # this returns updated (obs) lkd
 
-      # then, store all updates
-      for (task_index in seq_along(tasks_at_step)) {
-        task <- tasks_at_step[[task_index]]
-        updated_values <- task_updates[[task_index]]
+        # then, store all updates
+        for (task_index in seq_along(tasks_at_step)) {
+          task <- tasks_at_step[[task_index]]
+          updated_values <- task_updates[[task_index]]
+          for (node in names(updated_values)) {
+            likelihood_factor <- self$factor_list[[node]]
+            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
+          }
+        }
 
-        likelihood_factor <- self$factor_list[[update_node]]
-        self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values, node = update_node)
+        update_nodes <- self$updater$update_nodes
+        full_updates <- self$updater$apply_update_full(self$training_task, self, fold_number, new_epsilon)  # this returns updated (full) lkd
+        for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
       }
-      # for (task in tasks_at_step) {
-      #   all_submodels <- self$updater$generate_submodel_data(self, task, fold_number)
-      #   updated_values <- self$updater$apply_submodels(all_submodels, new_epsilons)
-      #   for (node in names(updated_values)) {
-      #     likelihood_factor <- self$factor_list[[node]]
-      #     self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
-      #   }
-      # }
     },
     sync_task = function(tmle_task, fold_number = "full", check = T, max_step = NULL){
       # Takes a task and syncs it with current update status of likelihood

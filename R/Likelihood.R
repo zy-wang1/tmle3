@@ -279,6 +279,37 @@ Likelihood <- R6Class(
     censoring_nodes = function() {
       return(private$.censoring_nodes)
     }
+    ,
+    list_all_predicted_lkd = function() {
+      if (!is.null(private$.list_all_predicted_lkd)) {
+        return(private$.list_all_predicted_lkd)
+      } else {
+        # all not A, not t=0 nodes
+        tmle_task <- self$training_task
+        temp_node_names <- names(tmle_task$npsem)
+        loc_A <- grep("A", temp_node_names)
+        loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+        loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+        if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
+
+        # get list of all possible predicted lkds
+        obs_data <- tmle_task$data
+        obs_variable_names <- colnames(obs_data)
+        list_all_predicted_lkd <- lapply(1:length(temp_node_names), function(loc_node) {
+          if (loc_node > 1) {
+            # currently only support univariate node for t>0
+            current_variable <- tmle_task$npsem[[loc_node]]$variables
+            temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
+            temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
+            temp_output <- self$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+            data.frame(temp_input, output = temp_output) %>% return
+          }
+        })
+        names(list_all_predicted_lkd) <- temp_node_names
+        private$.list_all_predicted_lkd <- list_all_predicted_lkd
+        return(list_all_predicted_lkd)
+      }
+    }
   ),
   private = list(
     .train_sublearners = function(tmle_task) {
@@ -310,6 +341,8 @@ Likelihood <- R6Class(
     },
     .cache = NULL,
     .censoring_nodes = NULL
+    ,
+    .list_all_predicted_lkd = NULL
   )
 )
 
