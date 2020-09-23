@@ -134,7 +134,7 @@ Param_middle_projection <- R6Class(
 
       psi = rep(0, length(EIC))
       IC <- rowSums(EIC)
-      result <- list(psi = psi, IC = IC, EIC = colMeans(EIC))
+      result <- list(psi = psi, IC = IC, EIC = colMeans(EIC), full_EIC = EIC)
       return(result)
     }
   ),

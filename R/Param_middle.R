@@ -260,6 +260,7 @@ Param_middle <- R6Class(
             current_ind <- (obs_data[[tmle_task$npsem[[ind_var]]$variables]] == 1)*1
             if (ind_var %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[ind_var]) else
               temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[ind_var])
+            temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)
             list_D[[ind_var]] <- (current_ind - temp_p) *
               list_newH[[ind_var]]
             # list_H[[ind_var]] * (list_Q_1[[ind_var]] - list_Q_0[[ind_var]])
@@ -271,7 +272,7 @@ Param_middle <- R6Class(
         vec_D <- list_D %>% compact %>% pmap_dbl(sum)
         IC <- vec_D
 
-        result <- list(psi = psi, IC = IC)
+        result <- list(psi = psi, IC = IC, full_IC = list_D)
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
         private$.list_D <- list_D

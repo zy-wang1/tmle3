@@ -12,7 +12,7 @@ code_list <- list.files("./R", full.names = T)
 for (code in code_list) source(code)
 source("./temp_code/generate_data.R")
 
-data_sim <- generate_Zheng_data(B = 400, tau = 2, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 1000, tau = 2, if_LY_misspec = F)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -53,19 +53,6 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
 tmle_params <- middle_spec$make_params(tmle_task, initial_likelihood)
 
 nontargeting <- tmle_params[[1]]$estimates(tmle_task)
-temp_lmed3_nontargeting <- nontargeting$psi
-temp_IC <- nontargeting$IC
-
-var_D <- var(temp_IC)
-n <- length(temp_IC)
-se <- sqrt(var_D / n)
-# temp_var <- var(temp_IC)/length(temp_IC)
-CI2 <- temp_lmed3_nontargeting + 1.96 * se
-CI1 <- temp_lmed3_nontargeting - 1.96 * se
-
-CI1
-CI2
-temp_lmed3_nontargeting
 
 
 
@@ -81,49 +68,27 @@ tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
 updater$tmle_params <- tmle_params
 test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
 firsttargeting <- test$estimates[[1]]
-temp_lmed3_est <- firsttargeting$psi
-temp_IC <- firsttargeting$IC
-
-var_D <- var(temp_IC)
-n <- length(temp_IC)
-se <- sqrt(var_D / n)
 
 
-# temp_var <- var(temp_IC)/length(temp_IC)
-CI2_first <- firsttargeting$psi + 1.96 * se
-CI1_first <- firsttargeting$psi - 1.96 * se
-
-temp_lmed3_est
-CI1_first
-CI2_first
 
 
 
 tlik <- Targeted_Likelihood$new(initial_likelihood, updater = list(constrain_step = T, delta_epsilon = 0.1), submodel_type_by_node = "EIC")
+# tlik <- initial_likelihood
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
-# tmle_params[[1]]$estimates()
+test <- tmle_params[[1]]$estimates()
 
-# test <- tmle_params[[1]]$clever_covariates()
-# test$Y_2 %>% mean
+tlik$updater$update_nodes
+nontargeting$full_IC %>% names
+nontargeting$full_IC %>% names %>% length
 
-test <- fit_tmle3(tmle_task, tlik, tmle_params, tlik$updater)
-warnings()
-test
-
-
-firsttargeting <- test$estimates[[1]]
-temp_lmed3_est <- firsttargeting$psi
-temp_IC <- firsttargeting$IC
-
-var_D <- var(temp_IC)
-n <- length(temp_IC)
-se <- sqrt(var_D / n)
+cor(test$full_EIC[,1], nontargeting$full_IC[[4]])
+cor(test$full_EIC[,2], nontargeting$full_IC[[9]])
+cor(test$full_EIC[,3], nontargeting$full_IC[[3]])
+cor(test$full_EIC[,4], nontargeting$full_IC[[5]])
+cor(test$full_EIC[,5], nontargeting$full_IC[[6]])
+cor(test$full_EIC[,6], nontargeting$full_IC[[8]])
+cor(test$full_EIC[,7], nontargeting$full_IC[[10]])
+cor(test$full_EIC[,8], nontargeting$full_IC[[11]])
 
 
-# temp_var <- var(temp_IC)/length(temp_IC)
-CI2_first <- firsttargeting$psi + 1.96 * se
-CI1_first <- firsttargeting$psi - 1.96 * se
-
-temp_lmed3_est
-CI1_first
-CI2_first

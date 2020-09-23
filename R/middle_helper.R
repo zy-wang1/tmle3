@@ -40,6 +40,7 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
       current_ind <- (obs_data[[task$npsem[[ind_var]]$variables]] == 1)*1
       if (ind_var %in% loc_Z) temp_p <- lik$get_likelihoods(cf_task_control, temp_node_names[ind_var]) else
         temp_p <- lik$get_likelihoods(cf_task_treatment, temp_node_names[ind_var])
+      temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)
       list_newH[[ind_var]] <- ( list_H[[ind_var]] * (current_ind - temp_p)  ) %>% as.matrix
     }
   }
@@ -73,47 +74,3 @@ gradient_generator_middle <- function(tmle_task, lik,  node, include_outcome = T
   return(task)
 }
 
-#' @export
-generate_npsem_late <- function(baseline_covariates, time_dependent_covariates, time_dependent_treatments,outcome, times ){
-  times <- sort(unique(times))
-  base_node <- define_node("W", baseline_covariates, time = min(times))
-  npsem <- list("W" = base_node)
-  parents <- "W"
-  for(t in times){
-    tcov_name <- c()
-    trt_name <-c()
-    for(i in seq_along(time_dependent_covariates)){
-      name <- paste0("L", t, letters[[i]])
-      tcov_name <- c(tcov_name, name)
-      cov <- time_dependent_covariates[[i]]
-      npsem[[name]] <- define_node(name, cov, parents, time = t)
-    }
-    for(i in seq_along(time_dependent_treatments)){
-      name <- paste0("A", t, letters[[i]])
-      trt_name <- c(trt_name, name)
-      trt <- time_dependent_treatments[[i]]
-      npsem[[name]] <- define_node(name, trt, parents, time = t)
-    }
-    parents <- c(parents, tcov_name, trt_name)
-  }
-  npsem[[outcome]] <- define_node("Y", outcome, parents, time = max(times) )
-  return(npsem)
-}
-
-#' @export
-generate_likelihood_late <- function(npsem, trt_learner = make_learner(Lrnr_glm), cov_learner = make_learner(Lrnr_glm), outcome_learner = make_learner(Lrnr_glm)){
-  A_nodes <- grep("A", names(npsem), value = T)
-  L_nodes <- grep("L", names(npsem), value = T)
-  factor_list = list()
-  for(node in L_nodes){
-    factor_list[[node]] <- LF_fit$new(node, cov_learner)
-  }
-
-  for(node in A_nodes){
-    factor_list[[node]] <- LF_fit$new(node, trt_learner)
-  }
-  factor_list[["W"]] <- LF_emp$new("W")
-  factor_list[["Y"]] <- LF_fit$new("Y", outcome_learner)
-  return(Likelihood$new(factor_list))
-
-}
