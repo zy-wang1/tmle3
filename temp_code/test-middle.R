@@ -96,3 +96,34 @@ CI1_first <- firsttargeting$psi - 1.96 * se
 temp_lmed3_est
 CI1_first
 CI2_first
+
+
+
+tlik <- Targeted_Likelihood$new(initial_likelihood, updater = list(constrain_step = T, delta_epsilon = 0.1), submodel_type_by_node = "EIC")
+tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
+# tmle_params[[1]]$estimates()
+
+# test <- tmle_params[[1]]$clever_covariates()
+# test$Y_2 %>% mean
+
+test <- fit_tmle3(tmle_task, tlik, tmle_params, tlik$updater)
+warnings()
+test
+
+
+firsttargeting <- test$estimates[[1]]
+temp_lmed3_est <- firsttargeting$psi
+temp_IC <- firsttargeting$IC
+
+var_D <- var(temp_IC)
+n <- length(temp_IC)
+se <- sqrt(var_D / n)
+
+
+# temp_var <- var(temp_IC)/length(temp_IC)
+CI2_first <- firsttargeting$psi + 1.96 * se
+CI1_first <- firsttargeting$psi - 1.96 * se
+
+temp_lmed3_est
+CI1_first
+CI2_first
