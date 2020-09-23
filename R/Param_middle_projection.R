@@ -46,21 +46,31 @@ Param_middle_projection <- R6Class(
   inherit = Param_base,
   public = list(
     initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y") {
+      temp_node_names <- names(observed_likelihood$training_task$npsem)
+      loc_A <- grep("A", temp_node_names)
+      loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+      loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+      if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
+
       all_nodes <- names(observed_likelihood$training_task$npsem)
       A_nodes <- grep("A", all_nodes, value = T)
-      L_nodes <- grep("L", all_nodes, value = T)
-      private$.update_nodes <- c(L_nodes, outcome_node)
+      Z_nodes <- grep("Z", all_nodes, value = T)
+      RLY_nodes <- grep("(R|L|Y).[1-9]$", all_nodes, value = T)
+
+      private$.update_nodes <- c(Z_nodes, RLY_nodes)
 
       super$initialize(observed_likelihood, list(), outcome_node)
-
-
-
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
+
       # Train the gradient
       private$.gradient <- Gradient$new(observed_likelihood,
-                                        ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment, cf_likelihood_control = self$cf_likelihood_control),
-                                        projection_task_generator = gradient_generator_late,
+                                        ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
+                                                        cf_likelihood_control = self$cf_likelihood_control,
+                                                        intervention_list_treatment = self$intervention_list_treatment,
+                                                        intervention_list_control = self$intervention_list_control
+                                                        ),
+                                        projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
 
       if(inherits(observed_likelihood, "Targeted_Likelihood")){
