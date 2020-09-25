@@ -430,7 +430,7 @@ get_obs_Q <- function(tmle_task, obs_data, list_H,
                                        # for all non-A, non-0 variables, calculate the variable by rule
                                        # for Z's, use A = 0 values; outputs are predicted probs at each possible comb
                                        loc_Z_needed <- loc_Z[loc_Z > loc_node]  # only product children variables
-                                       temp_list_0 <- lapply(loc_Z,
+                                       temp_list_0 <- lapply(loc_Z_needed,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_0, list_all_predicted_lkd[[each_t]])$output
                                                              })
@@ -494,6 +494,64 @@ get_obs_H <- function(tmle_task, obs_data, current_likelihood,
   for (temp_ind in loc_Z) {
     loc_A_needed <- loc_A[loc_A < temp_ind]  # all needed A nodes
     loc_RLY_needed <- loc_RLY[loc_RLY < temp_ind]
+    A_ind <-
+      # obs_data[[tmle_task$npsem[[last(loc_A_needed)]]$variables]] == intervention_levels_control[tmle_task$npsem[[last(loc_A_needed)]]$variables]
+      apply(sapply(loc_A_needed, function(k) {
+        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$variables]
+      }), 1, prod) == 1
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])) %>% pmap_dbl(prod)
+    part_RLY <- lapply(loc_RLY_needed, function(k) {
+      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k]) /
+        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])
+    }) %>% pmap_dbl(prod)
+    list_H[[temp_ind]] <- ifelse(A_ind, 1/part_A*part_RLY, 0) %>% as.vector
+  }
+  return(list_H)
+}
+
+
+
+
+
+#' @export
+get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
+                      cf_task_treatment, cf_task_control,
+                      intervention_variables, intervention_levels_treat, intervention_levels_control
+) {
+  obs_variable_names <- colnames(obs_data)
+  temp_node_names <- names(tmle_task$npsem)
+  loc_A <- grep("A", temp_node_names)
+  loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+  loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+  intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
+
+  # get a list of corresponding H covariates; ordered by nodes, not variables
+  list_H <- list()
+  # calculate RLY nodes
+  for (temp_ind in loc_RLY) {
+    loc_A_needed <- loc_A
+    loc_Z_needed <- loc_Z
+    # this is the At indicators for H_RLY; now
+    A_ind <-
+      # obs_data[[tmle_task$npsem[[last(loc_A_needed)]]$variables]] == intervention_levels_treat[tmle_task$npsem[[last(loc_A_needed)]]$variables]
+      apply(sapply(loc_A_needed, function(k) {
+        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_treat[tmle_task$npsem[[k]]$variables]
+      }), 1, prod) == 1
+    # A_ind <- obs_data[[temp_node_names[last(loc_A_needed)]]]  # using variable names (rather than node names) to inquire obs_data
+    # these A probs will be taken as product
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])) %>% pmap_dbl(prod)  # this is the likelihood of being 1
+    part_Z <- lapply(loc_Z_needed, function(k) {
+      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k]) /
+        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])
+    }) %>% pmap_dbl(prod)
+    if(length(part_Z) == 0) part_Z <- 1
+
+    list_H[[temp_ind]] <- ifelse(A_ind, 1/part_A*part_Z, 0) %>% as.vector
+  }
+  # calculate Z nodes
+  for (temp_ind in loc_Z) {
+    loc_A_needed <- loc_A
+    loc_RLY_needed <- loc_RLY
     A_ind <-
       # obs_data[[tmle_task$npsem[[last(loc_A_needed)]]$variables]] == intervention_levels_control[tmle_task$npsem[[last(loc_A_needed)]]$variables]
       apply(sapply(loc_A_needed, function(k) {

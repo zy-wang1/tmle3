@@ -18,12 +18,12 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
   if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
+  Y <- task$get_tmle_node(last(temp_node_names), format = T)[[1]]
+
   # get list of all possible predicted lkds
-  obs_data <- task$data
+  obs_data <- task$data %>% as.data.frame %>% select(-c(id, t))
   obs_variable_names <- colnames(obs_data)
   # ZW todo: to handle long format and wide format
-  temp_to_drop <- which(obs_variable_names %in% c("id", "t"))
-  obs_variable_names <- obs_variable_names[-temp_to_drop]
   # ZW todo: see if observed_likelihood needs to change to targeted likelihood
 
   intervention_variables <- map_chr(task$npsem[intervention_nodes], ~.x$variables)
@@ -31,17 +31,16 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   intervention_levels_treat <- map_dbl(intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
   intervention_levels_control <- map_dbl(intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
 
-  list_H <- get_obs_H(task, obs_data, current_likelihood = lik,
+  list_H <- get_obs_H_full(task, obs_data, current_likelihood = lik,
                       cf_task_treatment, cf_task_control,
                       intervention_variables, intervention_levels_treat, intervention_levels_control)
+
+
   list_newH <- list()
   for (ind_var in 1:length(list_H)) {
     if(!is.null(list_H[[ind_var]])) {
-      current_ind <- (obs_data[[task$npsem[[ind_var]]$variables]] == 1)*1
-      if (ind_var %in% loc_Z) temp_p <- lik$get_likelihoods(cf_task_control, temp_node_names[ind_var]) else
-        temp_p <- lik$get_likelihoods(cf_task_treatment, temp_node_names[ind_var])
-      temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)
-      list_newH[[ind_var]] <- ( list_H[[ind_var]] * (current_ind - temp_p)  ) %>% as.matrix
+      if (ind_var %in% loc_Z) list_newH[[ind_var]] <- (list_H[[ind_var]] * Y) %>% as.matrix
+      if (ind_var %in% loc_RLY) list_newH[[ind_var]] <- (list_H[[ind_var]] * Y) %>% as.matrix
     }
   }
   names(list_newH) <- temp_node_names

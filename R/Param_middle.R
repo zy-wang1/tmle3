@@ -80,11 +80,10 @@ Param_middle <- R6Class(
         if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
         # get list of all possible predicted lkds
-        obs_data <- tmle_task$data
+        obs_data <- tmle_task$data %>% as.data.frame %>% select(-c(id, t))
         obs_variable_names <- colnames(obs_data)
         # ZW todo: to handle long format and wide format
-        temp_to_drop <- which(obs_variable_names %in% c("id", "t"))
-        obs_variable_names <- obs_variable_names[-temp_to_drop]
+
         # ZW todo: see if observed_likelihood needs to change to targeted likelihood
         private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
         if (!is.null(private$.list_all_predicted_lkd)) {
@@ -107,7 +106,8 @@ Param_middle <- R6Class(
         intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
         intervention_levels_treat <- map_dbl(self$intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
         intervention_levels_control <- map_dbl(self$intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
-
+        names(intervention_levels_treat) <- names(self$intervention_list_treatment)
+        names(intervention_levels_control) <- names(self$intervention_list_control)
 
         list_H <- get_obs_H(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
                             cf_task_treatment, cf_task_control,
@@ -159,11 +159,9 @@ Param_middle <- R6Class(
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
       # get list of all possible predicted lkds
-      obs_data <- tmle_task$data
+      obs_data <- tmle_task$data %>% as.data.frame %>% select(-c(id, t))
       obs_variable_names <- colnames(obs_data)
       # ZW todo: to handle long format and wide format
-      temp_to_drop <- which(obs_variable_names %in% c("id", "t"))
-      obs_variable_names <- obs_variable_names[-temp_to_drop]
 
       private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
       # only calculate list of lkd here when it is null; otherwise only update it in updater$apply_update_all
@@ -205,7 +203,7 @@ Param_middle <- R6Class(
                                              rule_values = c(intervention_levels_control, 1))
 
         # for each observed L_0 vector, generate all needed combinations, one version for A = 1, one version for A = 0
-        unique_L0 <- obs_data[, tmle_task$npsem[[1]]$variables, with = F] %>% unique
+        unique_L0 <- obs_data[, tmle_task$npsem[[1]]$variables] %>% unique
         library_L0 <- data.frame(unique_L0, output =
                                    map_dbl(1:nrow(unique_L0), function(which_row) {
                                      temp_all_comb_0 <- cbind(unique_L0[which_row, ], all_possible_RZLY_0)
@@ -226,7 +224,7 @@ Param_middle <- R6Class(
                                    })
         )
         # substitution estimator
-        vec_est <- left_join(obs_data[, tmle_task$npsem[[1]]$variables, with = F], library_L0)$output
+        vec_est <- left_join(obs_data[, tmle_task$npsem[[1]]$variables], library_L0)$output
         psi <- mean(vec_est)
 
         # get true IC
