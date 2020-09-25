@@ -11,15 +11,13 @@ code_list <- list.files("./R", full.names = T)
 for (code in code_list) source(code)
 source("./temp_code/generate_data.R")
 
-
-
 # k <- 0
 record <- list()
 
 set.seed(123)
-for (k in 1:10) {
+for (k in 1:2) {
 
-  data_sim <- generate_Zheng_data(B = 20000, tau = 1, if_LY_misspec = F)
+  data_sim <- generate_Zheng_data(B = 50000, tau = 2, if_LY_misspec = F)
   data_wide <- data.frame(data_sim)
 
   node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -28,12 +26,12 @@ for (k in 1:10) {
                     Z_1 = "Z_1",
                     L_1 = "L1_1",
                     Y_1 = "Y_1"
-                    # ,
-                    # A_2 = "A_2",
-                    # R_2 = "R_2",
-                    # Z_2 = "Z_2",
-                    # L_2 = "L1_2",
-                    # Y_2 = "Y_2"
+                    ,
+                    A_2 = "A_2",
+                    R_2 = "R_2",
+                    Z_2 = "Z_2",
+                    L_2 = "L1_2",
+                    Y_2 = "Y_2"
   )
 
   middle_spec <- tmle_middle(
@@ -126,12 +124,6 @@ for (k in 1:10) {
     })
 
 
-  do.call(rbind, record)
-
-
-
-
-
   # new_eic[["Z_1"]][21:30]
   # nontargeting$full_IC[["Z_1"]][21:30]
   #
@@ -140,3 +132,5 @@ for (k in 1:10) {
   # nontargeting$full_IC[["L_1"]][21:30]
 }
 
+
+do.call(rbind, record)
