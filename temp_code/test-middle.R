@@ -12,12 +12,12 @@ for (code in code_list) source(code)
 source("./temp_code/generate_data.R")
 
 # k <- 0
-record <- list()
+record <- record_cor <- list()
 
-set.seed(123)
+set.seed(1234)
 for (k in 1:2) {
 
-  data_sim <- generate_Zheng_data(B = 50000, tau = 2, if_LY_misspec = F)
+  data_sim <- generate_Zheng_data(B = 2000, tau = 2, if_LY_misspec = F)
   data_wide <- data.frame(data_sim)
 
   node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -83,9 +83,9 @@ for (k in 1:2) {
   # tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
   # test <- tmle_params[[1]]$estimates()
 
-  tlik$updater$update_nodes
-  nontargeting$full_IC %>% names
-  nontargeting$full_IC %>% names %>% length
+  # tlik$updater$update_nodes
+  # nontargeting$full_IC %>% names
+  # nontargeting$full_IC %>% names %>% length
 
 
   # k <- k+1
@@ -117,9 +117,15 @@ for (k in 1:2) {
   k <- k+1
   record[[k]] <-
     sapply(tlik$updater$update_nodes, function(node) {
+      (
+        new_eic[[node]] - nontargeting$full_IC[[node]]
+      )^2 %>% mean
+    })
+
+  record_cor[[k]] <-
+    sapply(tlik$updater$update_nodes, function(node) {
       cor(
-        new_eic[[node]],
-        nontargeting$full_IC[[node]]
+        new_eic[[node]], nontargeting$full_IC[[node]], method = "kendall"
       )
     })
 
@@ -134,3 +140,4 @@ for (k in 1:2) {
 
 
 do.call(rbind, record)
+do.call(rbind, record_cor)

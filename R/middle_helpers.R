@@ -267,7 +267,7 @@ get_current_newH <- function(loc_node,
                                      })
       )
       Q1_current <- left_join(data_temp, library_output)$output
-      if (loc_node == length(temp_node_names)) Q1_current[[loc_node]] <- rep(1, length(Q1_current[[loc_node]]))
+      if (loc_node == length(temp_node_names)) Q1_current <- rep(1, length(Q1_current))
     }
 
     # get Q0 current
@@ -313,6 +313,7 @@ get_current_newH <- function(loc_node,
                                      })
       )
       Q0_current <- left_join(data_temp, library_output)$output
+      if (loc_node == length(temp_node_names)) Q0_current <- rep(0, length(Q0_current))
     }
 
     # get H current
