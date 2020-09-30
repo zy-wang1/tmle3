@@ -63,15 +63,27 @@ Param_middle_projection <- R6Class(
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
 
+      # todo: extend for stochastic
+      private$.cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+      private$.cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+
       # Train the gradient
       private$.gradient <- Gradient$new(observed_likelihood,
                                         ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
                                                         cf_likelihood_control = self$cf_likelihood_control,
                                                         intervention_list_treatment = self$intervention_list_treatment,
-                                                        intervention_list_control = self$intervention_list_control
+                                                        intervention_list_control = self$intervention_list_control,
+                                                        cf_task_treatment = self$cf_task_treatment,
+                                                        cf_task_control = self$cf_task_control
                                         ),
                                         projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
+
+      for (node in temp_node_names[-1]) {
+        private$.gradient$expand_task(observed_likelihood$training_task, node)
+        private$.gradient$expand_task(private$.cf_task_treatment, node)
+        private$.gradient$expand_task(private$.cf_task_control, node)
+      }
 
       if(inherits(observed_likelihood, "Targeted_Likelihood")){
         fold_number <- observed_likelihood$updater$update_fold
@@ -79,9 +91,11 @@ Param_middle_projection <- R6Class(
         fold_number <- "full"
       }
       private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
+
+
+
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", node = NULL) {
-
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
       }
@@ -95,9 +109,6 @@ Param_middle_projection <- R6Class(
       } else {
         islong= T
       }
-      print("clever")
-      print(update_nodes)
-      print(fold_number)
       EICs <- lapply(update_nodes, function(node){
         return(self$gradient$compute_component(tmle_task, node, fold_number = fold_number)$EIC)
       })
@@ -155,6 +166,12 @@ Param_middle_projection <- R6Class(
     cf_likelihood_control = function() {
       return(private$.cf_likelihood_control)
     },
+    cf_task_treatment = function() {
+      return(private$.cf_task_treatment)
+    },
+    cf_task_control = function() {
+      return(private$.cf_task_control)
+    },
     intervention_list_treatment = function() {
       return(self$cf_likelihood_treatment$intervention_list)
     },
@@ -172,9 +189,12 @@ Param_middle_projection <- R6Class(
     .type = "ATE",
     .cf_likelihood_treatment = NULL,
     .cf_likelihood_control = NULL,
+    .cf_task_treatment = NULL,
+    .cf_task_control = NULL,
     .supports_outcome_censoring = FALSE,
     .gradient = NULL,
     .submodel_type_supported = c("EIC"),
     .update_nodes = NULL
   )
 )
+
