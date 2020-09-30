@@ -13,7 +13,7 @@ source("./temp_code/generate_data.R")
 
 set.seed(123)
 
-data_sim <- generate_Zheng_data(B = 200, tau = 1, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 300, tau = 1, if_LY_misspec = F)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -53,10 +53,17 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
 
 tlik <- Targeted_Likelihood$new(initial_likelihood,
                                 submodel_type_by_node = "EIC" ,
-                                updater = list(convergence_type = "sample_size", constrain_step = T, delta_epsilon = 0.01))
-
+                                updater = list(convergence_type = "sample_size",
+                                               constrain_step = T,
+                                               optim_delta_epsilon = F,
+                                               one_dimensional=TRUE,
+                                               delta_epsilon = 0.01))
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
+
+tmle_params[[1]]$clever_covariates()
+tmle_params[[1]]$estimates()
+tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 
 tlik$updater$update_step(tlik, tmle_task)
 

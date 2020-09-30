@@ -238,7 +238,7 @@ Gradient <- R6Class(
 
       keep <- sapply(basis_list, function(b){
         col_index %in% b$cols
-      })
+      }) %>% unlist
 
       basis_list <- basis_list[keep]
       coefs <- coefs[c(T, keep)]

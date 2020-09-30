@@ -79,7 +79,7 @@ Param_middle_projection <- R6Class(
                                         projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
 
-      for (node in temp_node_names[-1]) {
+      for (node in self$update_nodes) {
         private$.gradient$expand_task(observed_likelihood$training_task, node)
         private$.gradient$expand_task(private$.cf_task_treatment, node)
         private$.gradient$expand_task(private$.cf_task_control, node)
