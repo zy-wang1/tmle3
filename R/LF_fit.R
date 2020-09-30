@@ -39,7 +39,7 @@ LF_fit <- R6Class(
   class = TRUE,
   inherit = LF_base,
   public = list(
-    initialize = function(name, learner, is_time_variant = FALSE, is_level_variant = F,  ..., type = "density") {
+    initialize = function(name, learner, is_time_variant = FALSE, is_level_variant = F, include_degeneracy = T,  ..., type = "density") {
       if(length(name) > 1){
         if(!(is_time_variant | is_level_variant)) {
           warning("You have specified that this a pooled regression but did not specify time or level variance.")
@@ -52,6 +52,7 @@ LF_fit <- R6Class(
       # TODO: add parameter is_time_variant
       private$.is_time_variant <- is_time_variant
       private$.is_level_variant <- is_level_variant
+      private$.include_degeneracy <- include_degeneracy
     },
     delayed_train = function(tmle_task) {
       # just return prefit learner if that's what we have
@@ -82,8 +83,8 @@ LF_fit <- R6Class(
         values <- self$get_density(tmle_task, fold_number, expand = expand, node = node)
       }
       if (!is.null(self$bound)) {
-        #values <- bound(values, self$bound)
-        values[, (node) := bound(values[[node]], self$bound)]
+        values <- bound(values, self$bound)
+        #values[, (node) := bound(values[[node]], self$bound)]
       }
 
       return(values)
@@ -100,38 +101,38 @@ LF_fit <- R6Class(
       }
       # unscale preds (to handle bounded continuous)
       preds <- tmle_task$unscale(preds, node)
-      preds <- as.data.table(preds)
+      #preds <- as.data.table(preds)
 
-      data <-  learner_task$get_data()
+      # data <-  learner_task$get_data()
+      #
+      # # For conditional means, degenerate value is exactly the value to be predicted
+      # if(check_at_risk & "at_risk" %in% colnames(data) & self$include_degeneracy) {
+      #   # By setting check_at_risk = F then one can obtain the counterfactual predictions
+      #   # conditioned on everyone being at risk.
+      #   names_degen_val <- paste0("degeneracy_value_", learner_task$nodes$outcome)
+      #   # TODO Support multivariate outcome
+      #   assertthat::assert_that(all(names_degen_val %in% colnames(data)), msg = "If at_risk is a column then last_val must be as well.")
+      #   not_at_risk <- which(data$at_risk == 0)
+      #   if(length(not_at_risk)>0){
+      #     degen_val <- data[not_at_risk, names_degen_val, with = F]
+      #     set(preds, not_at_risk, names(preds) ,  degen_val)
+      #   }
+      #
+      # }
 
-      # For conditional means, degenerate value is exactly the value to be predicted
-      if(check_at_risk & "at_risk" %in% colnames(data) ) {
-        # By setting check_at_risk = F then one can obtain the counterfactual predictions
-        # conditioned on everyone being at risk.
-        names_degen_val <- paste0("degeneracy_value_", learner_task$nodes$outcome)
-        # TODO Support multivariate outcome
-        assertthat::assert_that(all(names_degen_val %in% colnames(data)), msg = "If at_risk is a column then last_val must be as well.")
-        not_at_risk <- which(data$at_risk == 0)
-        if(length(not_at_risk)>0){
-          degen_val <- data[not_at_risk, names_degen_val, with = F]
-          set(preds, not_at_risk, names(preds) ,  degen_val)
-        }
-
-      }
-
-      preds$id <- rep(learner_task$id, nrow(preds)/length(learner_task$id))
-      preds$t <- rep(learner_task$time, nrow(preds)/length(learner_task$time))
-      setnames(preds, c(node, "id", "t"))
-      if(to_wide){
-        preds <- reshape(preds, idvar = "id", timevar = "t", direction = "wide")
-        if(length(node) + 1  == ncol(preds)){
-          setnames(preds, c("id", node))
-        }
-
-      }
-      if(drop_id & "id" %in% colnames(preds)) preds$id <- NULL
-      if(drop_time & "t" %in% colnames(preds)) preds$t <- NULL
-      if(drop & ncol(preds) == 1) preds <- unlist(preds, use.names = F)
+      # preds$id <- rep(learner_task$id, nrow(preds)/length(learner_task$id))
+      # preds$t <- rep(learner_task$time, nrow(preds)/length(learner_task$time))
+      # setnames(preds, c(node, "id", "t"))
+      # if(to_wide){
+      #   preds <- reshape(preds, idvar = "id", timevar = "t", direction = "wide")
+      #   if(length(node) + 1  == ncol(preds)){
+      #     setnames(preds, c("id", node))
+      #   }
+      #
+      # }
+      # if(drop_id & "id" %in% colnames(preds)) preds$id <- NULL
+      # if(drop_time & "t" %in% colnames(preds)) preds$t <- NULL
+      # if(drop & ncol(preds) == 1) preds <- unlist(preds, use.names = F)
 
       return(preds)
     },
@@ -164,39 +165,39 @@ LF_fit <- R6Class(
       } else {
         stop(sprintf("unsupported outcome_type: %s", outcome_type$type))
       }
-      if(check_at_risk & "at_risk" %in% colnames(data) ) {
-        # By setting check_at_risk = F then one can obtain the counterfactual predictions
-        # conditioned on everyone being at risk.
-        names_degen_val <- paste0("degeneracy_value_", learner_task$nodes$outcome)
-        # TODO Support multivariate outcome
-        assertthat::assert_that(all(names_degen_val %in% colnames(data)), msg = "If at_risk is a column then last_val must be as well.")
-        not_at_risk <- which(data$at_risk == 0)
-        if(length(not_at_risk)>0){
-          degen_val <- data[not_at_risk, names_degen_val, with = F]
-          #If not at risk then equal to degenerate value with prob 1
-          #TODO  we should probably not compute the likelihood for all the not at risk people?
-          #Since we change their value anyway?
-          likelihood[not_at_risk] <- as.numeric(observed[not_at_risk] == degen_val)
-        }
-
-      }
-      likelihood <- data.table(likelihood)
-      likelihood$id <- rep(learner_task$data$id, length(preds)/length(learner_task$data$id))
-
-
-      likelihood$t <- learner_task$data$t
-
-      setnames(likelihood, c(paste0(node, collapse = "%"), "id", "t"))
-      if(to_wide){
-        likelihood <- reshape(likelihood, idvar = "id", timevar = "t", direction = "wide")
-        if(length(node) + 1  == ncol(preds)){
-          setnames(preds, c("id", node))
-        }
-      }
-      if(drop_id & "id" %in% colnames(likelihood)) likelihood$id <- NULL
-      if(drop_time & "t" %in% colnames(likelihood)) likelihood$t <- NULL
-      if(drop & ncol(likelihood) == 1) likelihood <- unlist(likelihood, use.names = F)
-
+      # if(check_at_risk & "at_risk" %in% colnames(data) & self$include_degeneracy ) {
+      #   # By setting check_at_risk = F then one can obtain the counterfactual predictions
+      #   # conditioned on everyone being at risk.
+      #   names_degen_val <- paste0("degeneracy_value_", learner_task$nodes$outcome)
+      #   # TODO Support multivariate outcome
+      #   assertthat::assert_that(all(names_degen_val %in% colnames(data)), msg = "If at_risk is a column then last_val must be as well.")
+      #   not_at_risk <- which(data$at_risk == 0)
+      #   if(length(not_at_risk)>0){
+      #     degen_val <- data[not_at_risk, names_degen_val, with = F]
+      #     #If not at risk then equal to degenerate value with prob 1
+      #     #TODO  we should probably not compute the likelihood for all the not at risk people?
+      #     #Since we change their value anyway?
+      #     likelihood[not_at_risk] <- as.numeric(observed[not_at_risk] == degen_val)
+      #   }
+      #
+      # }
+      # likelihood <- data.table(likelihood)
+      # likelihood$id <- rep(learner_task$data$id, length(preds)/length(learner_task$data$id))
+      #
+      #
+      # likelihood$t <- learner_task$data$t
+      #
+      # setnames(likelihood, c(paste0(node, collapse = "%"), "id", "t"))
+      # if(to_wide){
+      #   likelihood <- reshape(likelihood, idvar = "id", timevar = "t", direction = "wide")
+      #   if(length(node) + 1  == ncol(preds)){
+      #     setnames(preds, c("id", node))
+      #   }
+      # }
+      # if(drop_id & "id" %in% colnames(likelihood)) likelihood$id <- NULL
+      # if(drop_time & "t" %in% colnames(likelihood)) likelihood$t <- NULL
+      # if(drop & ncol(likelihood) == 1) likelihood <- unlist(likelihood, use.names = F)
+      #
 
       return(likelihood)
     },
@@ -278,12 +279,16 @@ LF_fit <- R6Class(
     },
     is_level_variant = function(){
       return(private$.is_level_variant)
+    },
+    include_degeneracy = function() {
+      return(private$.include_degeneracy)
     }
   ),
   private = list(
     .name = NULL,
     .learner = NULL,
     .is_time_variant = NULL,
-    .is_level_variant = NULL
+    .is_level_variant = NULL,
+    .include_degeneracy = NULL
   )
 )

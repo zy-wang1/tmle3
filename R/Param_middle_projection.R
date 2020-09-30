@@ -1,7 +1,5 @@
-#' Longitudinal Average Treatment Effect
-#' Parameter for ATE in (L0 A0 L1 A1 ... Y) data structure with any number of time dependent covariates and treatments.
-#' Supports arbitrarily many time points.
-#' Parameter definition for the Longitudinal Average Treatment Effect (LATE).
+#' Longitudinal Mediation via projection
+
 #' @importFrom R6 R6Class
 #' @importFrom uuid UUIDgenerate
 #' @importFrom methods is
@@ -41,28 +39,38 @@
 #'     }
 #' }
 #' @export
-Param_LATE <- R6Class(
-  classname = "Param_LATE",
+Param_middle_projection <- R6Class(
+  classname = "Param_middle_projection",
   portable = TRUE,
   class = TRUE,
   inherit = Param_base,
   public = list(
     initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y") {
+      temp_node_names <- names(observed_likelihood$training_task$npsem)
+      loc_A <- grep("A", temp_node_names)
+      loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+      loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+      if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
+
       all_nodes <- names(observed_likelihood$training_task$npsem)
       A_nodes <- grep("A", all_nodes, value = T)
-      L_nodes <- grep("L", all_nodes, value = T)
-      private$.update_nodes <- c(L_nodes, outcome_node)
+      Z_nodes <- grep("Z", all_nodes, value = T)
+      RLY_nodes <- grep("(R|L|Y).[1-9]$", all_nodes, value = T)
+
+      private$.update_nodes <- c(Z_nodes, RLY_nodes)
 
       super$initialize(observed_likelihood, list(), outcome_node)
-
-
-
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
+
       # Train the gradient
       private$.gradient <- Gradient$new(observed_likelihood,
-                                        ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment, cf_likelihood_control = self$cf_likelihood_control),
-                                        projection_task_generator = gradient_generator_late,
+                                        ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
+                                                        cf_likelihood_control = self$cf_likelihood_control,
+                                                        intervention_list_treatment = self$intervention_list_treatment,
+                                                        intervention_list_control = self$intervention_list_control
+                                        ),
+                                        projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
 
       if(inherits(observed_likelihood, "Targeted_Likelihood")){
@@ -73,11 +81,10 @@ Param_LATE <- R6Class(
       private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", node = NULL) {
+
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
       }
-      print(tmle_task$uuid)
-      print(node)
       update_nodes <- intersect(self$update_nodes, attr(tmle_task, "target_nodes"))
       if(!is.null(node)){
         update_nodes <- c(node)
@@ -86,9 +93,11 @@ Param_LATE <- R6Class(
       if(is.null(update_nodes)){
         update_nodes <- self$update_nodes
       } else {
-      islong= T
+        islong= T
       }
+      print("clever")
       print(update_nodes)
+      print(fold_number)
       EICs <- lapply(update_nodes, function(node){
         return(self$gradient$compute_component(tmle_task, node, fold_number = fold_number)$EIC)
       })
@@ -129,7 +138,9 @@ Param_LATE <- R6Class(
 
       psi = rep(0, length(EIC))
       IC <- rowSums(EIC)
-      result <- list(psi = psi, IC = IC, EIC = colMeans(EIC))
+      result <- list(psi = psi, IC = IC, EIC = colMeans(EIC)
+                     , full_EIC = EIC
+      )
       return(result)
     }
   ),
@@ -167,4 +178,3 @@ Param_LATE <- R6Class(
     .update_nodes = NULL
   )
 )
-

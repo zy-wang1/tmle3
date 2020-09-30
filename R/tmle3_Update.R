@@ -128,32 +128,42 @@ tmle3_Update <- R6Class(
       # TODO: change clever covariates to allow only calculating some nodes
       clever_covariates <- lapply(self$tmle_params, function(tmle_param) {
         # Assert that it supports the submodel type
-        tmle_param$supports_submodel_type(submodel_type)
-        formal_args <- names(formals(tmle_param$clever_covariates))
+        tmle_param$supports_submodel_type(submodel_type, update_node)
+        #formal_args <- names(formals(tmle_param$clever_covariates))
 
         # For backwards compatibility:
         # In future, clever covariate functions should accept a "node" and "submodel_type" argument.
-        if("for_fitting" %in% formal_args) {
-          return(tmle_param$clever_covariates(tmle_task, fold_number, for_fitting = for_fitting))
-        }
-        else if(all(c("submodel_type", "node") %in% formal_args)){
-          return(tmle_param$clever_covariates(tmle_task, fold_number, submodel_type = submodel_type, node = update_node))
-        }
-        else if("submodel_type" %in% formal_args){
-          return(tmle_param$clever_covariates(tmle_task, fold_number, submodel_type = submodel_typee))
-        }
-        else if("node" %in% formal_args){
-          return(tmle_param$clever_covariates(tmle_task, fold_number, node = update_node))
-        }
-         else {
-          return(tmle_param$clever_covariates(tmle_task, fold_number))
-        }
+        args <- list(for_fitting = for_fitting, submodel_type = submodel_type, fold_number = fold_number, tmle_task = tmle_task
+             ,node = update_node)
+        return(sl3:::call_with_args(tmle_param$clever_covariates, args))
+        # if("for_fitting" %in% formal_args) {
+        #   return(tmle_param$clever_covariates(tmle_task, fold_number, for_fitting = for_fitting))
+        # }
+        # else if(all(c("submodel_type", "node") %in% formal_args)){
+        #   return(tmle_param$clever_covariates(tmle_task, fold_number, submodel_type = submodel_type, node = update_node))
+        # }
+        # else if("submodel_type" %in% formal_args){
+        #   return(tmle_param$clever_covariates(tmle_task, fold_number, submodel_type = submodel_typee))
+        # }
+        # else if("node" %in% formal_args){
+        #   return(tmle_param$clever_covariates(tmle_task, fold_number, node = update_node))
+        # }
+        #  else {
+        #   return(tmle_param$clever_covariates(tmle_task, fold_number))
+        # }
       })
 
       node_covariates <- lapply(clever_covariates, `[[`, update_node)
       # Get EDs if present. Only for training task
-      ED <- lapply(clever_covariates, `[[`, "ED")
-      ED <- as.vector(unlist(lapply(ED, `[[`, update_node) ))
+      if(self$one_dimensional & for_fitting) {
+        IC <- lapply(clever_covariates, `[[`, "IC")
+        IC <- do.call(cbind, lapply(IC, `[[`, update_node) )
+        if(is.null(IC)) {
+          IC <- lapply(private$.current_estimates, `[[`, "IC")
+          IC <- do.call(cbind, IC)
+        }
+      }
+
       covariates_dt <- do.call(cbind, node_covariates)
 
       # if (self$one_dimensional) {
@@ -176,6 +186,13 @@ tmle3_Update <- R6Class(
       # protect against qlogis(1)=Inf
       initial <- bound(initial, 0.005)
       weights <- tmle_task$get_regression_task(update_node)$weights
+      n <- length(unique(tmle_task$id))
+      if(self$one_dimensional & for_fitting){
+        # This computes (possibly weighted) ED and handles long case
+        ED <- colSums(IC * weights)/n #apply(IC , 2, function(v) {sum(as.vector(matrix(v, nrow = n, byrow = T)*weights))})/length(weights)
+      } else {
+        ED <- NULL
+      }
 
       if(length(observed) != length(initial)) {
         ratio <- length(initial) / length(observed)
@@ -188,6 +205,7 @@ tmle3_Update <- R6Class(
       if(length(weights) != length(initial)) {
         ratio <- length(initial) / length(weights)
         if(ratio%%1 == 0){
+          # This is for likelihood factors that output long_format predictions that dont match nrow of input task
           warning("Weights and initial length do not match but are multiples of each other. Recycling values...")
           weights <- rep(weights, ratio)
         }
@@ -230,7 +248,7 @@ tmle3_Update <- R6Class(
       submodel_data["update_node"] <- NULL
       weights <- submodel_data$weights
       # TODO
-      weights <- 1
+
       if(self$one_dimensional){
         # Will break if not called by original training task
 
@@ -248,14 +266,16 @@ tmle3_Update <- R6Class(
 
           vars <- unlist(lapply(initial_variances, `[[`, update_node))
           if(self$convergence_type == "scaled_var" & !is.null(vars)){
-
-            zero <- vars < 1e-4
-            vars[zero] <- 1e-4
-
+            #max_var <- max(vars)
+            #Ensure that params with very small variances dont get too much weight
+            median_var <- median(vars)
+            min_var_allowed <- max(median_var/100,1e-3)
+            zero <- vars < min_var_allowed
+            vars[zero] <- min_var_allowed
             ED <- ED / sqrt(vars)
           }
 
-          EDnormed <- ED / (norm(ED, type = "2") / sqrt(length(ED)))
+          EDnormed <- ED / norm(ED, type = "2")# / sqrt(length(ED))))
           submodel_data$H <- submodel_data$H %*% EDnormed
 
           ED <- EDnormed
@@ -284,29 +304,45 @@ tmle3_Update <- R6Class(
 
           loss_function <- submodel_info$loss_function
 
-          loss <- loss_function(submodel_estimate, submodel_data$observed)# * weights
+          loss <- loss_function(submodel_estimate, submodel_data$observed) * weights
           mean(loss)
 
         }
 
 
         if (self$optim_delta_epsilon) {
+          delta_epsilon <- self$delta_epsilon
+          if(is.list(delta_epsilon)) {
+            delta_epsilon <- delta_epsilon[[update_node]]
+          }
+          if(is.function(delta_epsilon)) {
+            delta_epsilon <- delta_epsilon(submodel_data$H)
+          }
+          delta_epsilon <- c(0,delta_epsilon)
+
+          min_eps = min(delta_epsilon)
+          max_eps = max(delta_epsilon)
+
           optim_fit <- optim(
-            par = list(epsilon = self$delta_epsilon), fn = risk,
-            lower = 0, upper = self$delta_epsilon,
+            par = list(epsilon = max_eps), fn = risk,
+            lower = min_eps, upper = max_eps,
             method = "Brent"
           )
           epsilon <- optim_fit$par
 
         } else {
           epsilon <- self$delta_epsilon
+          if(is.list(epsilon)) {
+            epsilon <- epsilon[[update_node]]
+          }
         }
 
         risk_val <- risk(epsilon)
         risk_zero <- risk(0)
 
          #TODO: consider if we should do this
-        if(risk_zero<risk_val){
+        if(risk_zero<=risk_val){
+
           epsilon <- 0
           #private$.delta_epsilon <- private$.delta_epsilon/2
         }
@@ -320,6 +356,7 @@ tmle3_Update <- R6Class(
             submodel_fit <- glm(observed ~ H - 1, submodel_data[-sub_index],
                                 offset = submodel_info$offset_tranform(submodel_data$initial),
                                 family = submodel_info$family,
+                                weights = weights,
 
                                 start = rep(0, ncol(submodel_data$H))
             )
@@ -421,8 +458,8 @@ tmle3_Update <- R6Class(
 
           return(var(v))
         })/n)
-        # Handle case where variance is 0 for whatever reason
-        ED_threshold <- pmax(se_Dstar / min(log(n), 10), 1e-7)
+        # Handle case where variance is 0 or very small for whatever reason
+        ED_threshold <- pmax(se_Dstar / min(log(n), 10), 1/n)
       } else if (self$convergence_type == "sample_size") {
         ED_threshold <- 1 / n
       }
@@ -463,7 +500,39 @@ tmle3_Update <- R6Class(
         tmle_param$estimates(tmle_task, update_fold)
       })
 
-      private$.initial_variances <- lapply(private$.current_estimates, `[[`, "var_comps")
+      if(FALSE) {
+        clever_covariates <- lapply(self$tmle_params, function(tmle_param) {
+          tmle_param$clever_covariates(tmle_task, update_fold)})
+        IC <- lapply(clever_covariates, `[[`, "IC")
+        if(!is.null(IC[[1]])){
+          n <- length(unique(tmle_task$id))
+          IC_vars <- lapply(IC, function(IC) {
+            out <- lapply(self$update_nodes, function(node) {
+              weights <- tmle_task$get_regression_task(node)$weights
+              apply(IC[[node]] * weights,2, function(v) {var(rowSums(matrix(v, nrow = n, byrow = T)))})
+            } )
+            names(out) <- self$update_nodes
+            return(out)
+          })
+          private$.initial_variances <- IC_vars
+
+
+        } else {
+          n <- length(unique(tmle_task$id))
+          IC <- lapply(private$.current_estimates, `[[`, "IC")
+          IC_vars <- lapply(IC, function(IC) {
+            weights <- tmle_task$get_regression_task(node)$weights
+            IC_var <- apply(IC[[node]] * weights,2, function(v) {var(rowSums(matrix(v, nrow = n, byrow = T)))})
+            IC_var <- lapply(self$update_nodes, function(node) {IC_var})
+            names(IC_var) <- self$update_nodes
+            return(IC_var)
+          })
+          private$.initial_variances <- IC_vars
+        }
+      }
+
+
+      #private$.initial_variances <- lapply(private$.current_estimates, `[[`, "var_comps")
 
       for (steps in seq_len(maxit)) {
         self$update_step(likelihood, tmle_task, update_fold)
@@ -503,6 +572,11 @@ tmle3_Update <- R6Class(
       private$.current_estimates <- lapply(self$tmle_params, function(tmle_param) {
         tmle_param$estimates(tmle_task, update_fold)
       })
+      #TODO Variance weights should be based on each component separately.
+      # Might be better to have estimates return IC and IC-components.
+      # private$.initial_variances <- lapply(private$.current_estimates, function(ests) {
+      #   resample::colVars(matrix(ests$IC, nrow = length(unique(tmle_task$id))))
+      # })
       private$.initial_variances <- lapply(private$.current_estimates, `[[`, "var_comps")
     }
   ),

@@ -97,6 +97,10 @@ Gradient <- R6Class(
 
       cached_task <- get0(key, self$cache, inherits = FALSE)
       if(!is.null(cached_task)){
+        if(is.null(attr(cached_task, "target_nodes"))) {
+          print(node)
+          stop("wrong")
+        }
         return(cached_task)
       }
       variables <- tmle_task$npsem[[node]]$variables
@@ -122,14 +126,19 @@ Gradient <- R6Class(
       suppressWarnings(long_task <- tmle3_Task$new(long_data, tmle_task$npsem, id = "id", time = "t", force_at_risk = tmle_task$force_at_risk, summary_measure_columns = c(tmle_task$summary_measure_columns, "trueid")))
 
       setattr(long_task, "target_nodes", node)
-
+      if(is.null(attr(long_task, "target_nodes"))) {
+        print(node)
+        stop("wrong")
+      }
       assign(key, long_task, self$cache)
 
       private$.uuid_expanded_history[[long_task$uuid]] <- node
       return(long_task)
     },
     compute_component = function(tmle_task, node, fold_number = "full"){
-
+      print("Gradient")
+      print(node)
+      print(fold_number)
       time <- tmle_task$npsem[[node]]$time
 
       self$assert_trained()
@@ -142,7 +151,8 @@ Gradient <- R6Class(
       IC_task <- self$generate_task(tmle_task, node, include_outcome = F, fold_number = fold_number)
 
 
-      col_index <- which(colnames(IC_task$X) == long_task$npsem[[node]]$variables )
+      col_index <- which(colnames(IC_task$X) == node )
+
       long_preds <- NULL
 
 
@@ -185,7 +195,7 @@ Gradient <- R6Class(
 
       # TODO
 
-      variables <- long_task$npsem[[node]]$variables
+      variables <- node
       #TODO check id order
 
       data <- data.table(cbind(merge(long_task$data[,c("id", "trueid", "t")], cbind(long_task$get_tmle_node(node, format = T, include_id = T, include_time = T), long_preds), by = c("id", "t"))
@@ -209,7 +219,7 @@ Gradient <- R6Class(
 
       cdf <- as.data.table(t(apply(data, 1, cumsum)))
       setnames(cdf, as.character(levels))
-
+      #print(cdf)
 
       if(long_task$uuid == tmle_task$uuid){
         #if expanded task is tmle_task then obtain then expand cdf to match
@@ -223,11 +233,13 @@ Gradient <- R6Class(
       fit_obj <- private$.component_fits[[node]]
       basis_list <- fit_obj$basis_list
       coefs <- fit_obj$coefs
-      col_index <- which(colnames(IC_task$X) == tmle_task$npsem[[node]]$variables )
+      col_index <- which(colnames(IC_task$X) == node )
+
 
       keep <- sapply(basis_list, function(b){
         col_index %in% b$cols
       })
+
       basis_list <- basis_list[keep]
       coefs <- coefs[c(T, keep)]
 
@@ -248,17 +260,19 @@ Gradient <- R6Class(
         diff <- design[[as.integer(i)]] - 1 + cdf[[col_index]]
         set(design, , as.integer(i), diff)
       })
-      min_val <- min(IC_task$X[[variables]]) - 5
+      min_val <- min(IC_task$X[[node]]) - 5
       clean_basis <- function(basis){
         index = which(basis$cols == col_index)
         basis$cutoffs[index] <- min_val
         return(basis)
       }
       clean_list = lapply(basis_list, clean_basis)
-
+      #print(table(unlist( lapply(basis_list, `[[`, "cols"))))
       clean_design <- hal9001::make_design_matrix(X, clean_list)
       clean_design <- data.table(as.matrix(clean_design))
 
+      #print(as.data.table(clean_design))
+      #print(as.data.table(coefs))
 
       mid_result <- as.matrix(design * clean_design)
       result =  mid_result %*% coefs[-1]
@@ -414,6 +428,7 @@ Gradient <- R6Class(
         coefs <- fit$coefs
 
         keep <- coefs[-1]!=0
+
         basis_list <- basis_list[keep]
         coefs_new <- coefs[c(T, keep)]
         if(sum(coefs_new) != sum(coefs)) stop("squash went wrong")

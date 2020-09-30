@@ -41,14 +41,31 @@ LF_emp <- R6Class(
       super$train(tmle_task)
       weights <- tmle_task$get_regression_task(self$name)$weights
 
+      # TODO weights
       observed <- (tmle_task$get_tmle_node(self$name, format = T, include_id = F))
+      if(ncol(observed) == 0 | length(observed) ==0){
+        private$.empirical_fit <- list(emp_probs = NULL, uniq_obs = NULL )
+        return()
+
+      }
       uniq_obs <- unique(observed)
 
-      counts <- unlist(apply(uniq_obs, 1, function(obs){ sum(weights * as.numeric(apply(observed, 1, function(new_obs){
+      match_index <- uniq_obs[observed, which = T, on = colnames(uniq_obs)]
+      weights_mat <- data.table(weights = weights, grp = match_index)
+      emp_probs <- weights_mat[, sum(weights), by = grp]
+      emp_probs$grp <- NULL
+      emp_probs <- unlist(emp_probs) / sum(weights)
+      if(length(emp_probs) != nrow(uniq_obs)) {
+        stop("LF_emp error")
+      }
+      #emp_probs <- table(match_index) /nrow(observed)
 
-        all(new_obs == obs)})))}))
-
-      emp_probs <- counts/sum(counts)
+      #SUPER SLOW. Thank you data.table
+      # counts <- unlist(apply(uniq_obs, 1, function(obs){ sum(weights * as.numeric(apply(observed, 1, function(new_obs){
+      #
+      #   all(new_obs == obs)})))}))
+      #
+      # emp_probs <- counts/sum(counts)
 
 
       private$.empirical_fit <- list(emp_probs = emp_probs, uniq_obs = uniq_obs )
@@ -67,40 +84,43 @@ LF_emp <- R6Class(
         return(observedfull)
       }
 
-      observed <- as.matrix(observedfull[, node, with = F]) #unlist(observedfull[, setdiff(colnames(observedfull), c("id", "t")), with = F])
+      observed <- observedfull[, node, with = F] #unlist(observedfull[, setdiff(colnames(observedfull), c("id", "t")), with = F])
 
       # TODO dont need weights for prediction??
       #weights <- tmle_task$get_regression_task(self$name)$weights
       emp_probs <-  private$.empirical_fit$emp_probs
+      if(is.null(emp_probs)) {
+        return(rep(1/tmle_task$nrow, tmle_task$nrow))
+      }
       uniq_obs <-  private$.empirical_fit$uniq_obs
 
+      match_index <- uniq_obs[observed, which = T, on = colnames(uniq_obs)]
+      probs <- emp_probs[match_index]
+      probs[is.na(probs)] <- 0
 
-      matched_obs <- apply(observed, 1, function(obs){
-        index <- which(unlist(apply(uniq_obs, 1, function(uniq) {
-          all(uniq == obs)
-        })))
-        if(length(index) == 0){
-          return(NA)
-        }
-        return(index)
-      })
+      # TODO THe above might be wrong.
+      # matched_obs <- apply(observed, 1, function(obs){
+      #   index <- which(unlist(apply(uniq_obs, 1, function(uniq) {
+      #     all(uniq == obs)
+      #   })))
+      #   if(length(index) == 0){
+      #     return(NA)
+      #   }
+      #   return(index)
+      # })
        # match(observed, uniq_obs)
       #Match observations to empirical probs obtained from training set
-      probs <- as.vector(sapply(matched_obs, function(i) {
-        if(is.na(i)) {
-          return(0)
-        }
-        return(emp_probs[i])
-      }))
+
 
       #probs <- weights*probs
       #weights <- tmle_task$get_regression_task(self$name)$weights
-      probs <- data.table(probs )
-      setnames(probs, self$name)
-      probs$id = observedfull$id
-      probs$t = observedfull$t
-
+      #probs <- as.data.table(probs )
+      #setnames(probs, self$name)
+      #probs$id = observedfull$id
+      #probs$t = observedfull$t
+      probs <- unlist(probs)
       # probs$t = NULL
+
       return(probs)
     },
     sample = function(tmle_task = NULL, n_samples = NULL, fold_number = "full") {

@@ -43,19 +43,29 @@ Param_base <- R6Class(
       }
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", submodel_type = "logistic") {
+      # TODO Returns clever covariates and component-specific ICs ?
       stop("Param_base is a base class")
     },
     estimates = function(tmle_task = NULL, fold_number = "full") {
+      #Returns full IC and estimate
       stop("Param_base is a base class")
     },
 
     print = function() {
       cat(sprintf("%s: %s\n", class(self)[1], self$name))
     },
-    supports_submodel_type = function(submodel_type){
-      if(!(submodel_type %in% self$submodel_type_supported)){
+    supports_submodel_type = function(submodel_type, node){
+
+      if(is.list(self$submodel_type_supported)) {
+        if( !is.null(self$submodel_type_supported[[node]]) & self$submodel_type_supported[[node]]!=submodel_type) {
+          stop(sprintf("This Param does not support the optimization strategy: %s", submodel_type))
+
+        }
+      }
+      else if(!(submodel_type %in% self$submodel_type_supported)){
         stop(sprintf("This Param does not support the optimization strategy: %s", submodel_type))
       }
+
     }
   ),
   active = list(
@@ -76,7 +86,7 @@ Param_base <- R6Class(
       return(private$.supports_outcome_censoring)
     },
     supports_weights = function() {
-      return(private$.supports_weights)
+      return(TRUE)
     },
     targeted = function() {
       return(private$.targeted)
@@ -92,7 +102,7 @@ Param_base <- R6Class(
     .targeted = TRUE,
     .supports_outcome_censoring = FALSE,
     .submodel_type_supported = c("logistic"),
-    .supports_weights = F
+    .supports_weights = T
   )
 )
 
