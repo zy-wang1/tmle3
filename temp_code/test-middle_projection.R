@@ -56,7 +56,7 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
                                 updater = list(convergence_type = "sample_size",
                                                constrain_step = T,
                                                optim_delta_epsilon = F,
-                                               one_dimensional=TRUE,
+                                               # one_dimensional=TRUE,
                                                delta_epsilon = 0.01))
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
