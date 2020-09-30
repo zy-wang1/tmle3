@@ -6,9 +6,11 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   cf_likelihood_treatment = ipw_args$cf_likelihood_treatment
   intervention_list_treatment <- ipw_args$intervention_list_treatment
   intervention_list_control <- ipw_args$intervention_list_control
-  # todo: extend for stochastic
-  cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(task)[[1]]
-  cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
+  cf_task_treatment <- ipw_args$cf_task_treatment
+  cf_task_control <- ipw_args$cf_task_control
+  # # todo: extend for stochastic
+  # cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(task)[[1]]
+  # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
 
   intervention_nodes <- union(names(intervention_list_treatment), names(intervention_list_control))
 

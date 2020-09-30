@@ -11,9 +11,9 @@ code_list <- list.files("./R", full.names = T)
 for (code in code_list) source(code)
 source("./temp_code/generate_data.R")
 
-set.seed(1234)
+set.seed(123)
 
-data_sim <- generate_Zheng_data(B = 2000, tau = 2, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 200, tau = 1, if_LY_misspec = F)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -22,12 +22,12 @@ node_list <- list(L_0 = c("L1_0", "L2_0"),
                   Z_1 = "Z_1",
                   L_1 = "L1_1",
                   Y_1 = "Y_1"
-                  ,
-                  A_2 = "A_2",
-                  R_2 = "R_2",
-                  Z_2 = "Z_2",
-                  L_2 = "L1_2",
-                  Y_2 = "Y_2"
+                  # ,
+                  # A_2 = "A_2",
+                  # R_2 = "R_2",
+                  # Z_2 = "Z_2",
+                  # L_2 = "L1_2",
+                  # Y_2 = "Y_2"
 )
 
 middle_spec <- tmle_middle(
@@ -36,6 +36,15 @@ middle_spec <- tmle_middle(
 )
 
 tmle_task <- middle_spec$make_tmle_task(data_wide, node_list)
+
+# choose base learners
+lrnr_glm_fast <- Lrnr_glm_fast$new(outcome_type = "binomial")
+learner_list <- lapply(1:length(tmle_task$npsem), function(s) Lrnr_sl$new(
+  learners = list(
+    lrnr_glm_fast
+  )
+))
+names(learner_list) <- names(tmle_task$npsem)  # the first will be ignored; empirical dist. will be used for covariates
 
 initial_likelihood <- middle_spec$make_initial_likelihood(
   tmle_task,
@@ -49,5 +58,8 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
 
+tlik$updater$update_step(tlik, tmle_task)
 
 tlik$updater$update(tlik, tmle_task)
+
+
