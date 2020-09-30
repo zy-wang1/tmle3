@@ -114,6 +114,10 @@ Param_middle_projection <- R6Class(
       })
 
       names(EICs) <- update_nodes
+
+      EICs[[length(EICs) + 1]] <- EICs
+      names(EICs)[length(EICs)] <- "IC"
+
       return(EICs)
     },
     estimates = function(tmle_task = NULL, fold_number = "full") {
@@ -150,7 +154,7 @@ Param_middle_projection <- R6Class(
       psi = rep(0, length(EIC))
       IC <- rowSums(EIC)
       result <- list(psi = psi, IC = IC, EIC = colMeans(EIC)
-                     , full_EIC = EIC
+                     # , full_EIC = EIC
       )
       return(result)
     }

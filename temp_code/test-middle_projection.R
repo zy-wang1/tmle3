@@ -55,9 +55,25 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
                                 submodel_type_by_node = "EIC" ,
                                 updater = list(convergence_type = "sample_size",
                                                constrain_step = T,
-                                               optim_delta_epsilon = F,
-                                               # one_dimensional=TRUE,
+                                               # optim_delta_epsilon = F,
+                                               one_dimensional=TRUE,
                                                delta_epsilon = 0.01))
+
+tlik <- Targeted_Likelihood$new(initial_likelihood,
+                                submodel_type_by_node = "EIC" ,
+                                updater = list(one_dimensional = T,
+                                               constrain_step = T,
+                                               convergence_type = "scaled_var",
+                                               delta_epsilon = list("Y" = 1e-3, "A" = function(x) {
+                                                 res = 0.75/max(abs(x))
+                                                 res <- min(res, 0.1)
+                                                 return(res)
+                                               },
+                                               "Z" = function(x) {
+                                                 res = 0.75/max(abs(x))
+                                                 res <- min(res, 0.1)
+                                                 return(res)
+                                               })))
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
 
