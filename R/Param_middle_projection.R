@@ -128,7 +128,7 @@ Param_middle_projection <- R6Class(
       intervention_nodes <- union(names(self$intervention_list_treatment), names(self$intervention_list_control))
 
       # clever_covariates happen here (for this param) only, but this is repeated computation
-      EIC <- (do.call(cbind, self$clever_covariates(tmle_task, fold_number)))
+      EIC <- (do.call(cbind, self$clever_covariates(tmle_task, fold_number)$IC))
 
       #TODO need to montecarlo simulate from likleihood to eval parameter.
 

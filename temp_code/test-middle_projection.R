@@ -13,7 +13,7 @@ source("./temp_code/generate_data.R")
 
 set.seed(123)
 
-data_sim <- generate_Zheng_data(B = 300, tau = 1, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 500, tau = 1, if_LY_misspec = F)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -29,6 +29,10 @@ node_list <- list(L_0 = c("L1_0", "L2_0"),
                   # L_2 = "L1_2",
                   # Y_2 = "Y_2"
 )
+
+node_list$L_1 <- "L_1"
+names(data_sim[[2]])[grep("L1_1", names(data_sim[[2]]))] <- "L_1"
+names(data_wide)[grep("L1_1", names(data_wide))] <- "L_1"
 
 middle_spec <- tmle_middle(
   treatment_level = 1,
@@ -51,6 +55,9 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
   learner_list
 )
 
+# tmle_params <- middle_spec$make_params(tmle_task, initial_likelihood, if_projection = T)
+# tmle_params[[1]]$clever_covariates()
+
 tlik <- Targeted_Likelihood$new(initial_likelihood,
                                 submodel_type_by_node = "EIC" ,
                                 updater = list(convergence_type = "sample_size",
@@ -59,30 +66,32 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
                                                one_dimensional=TRUE,
                                                delta_epsilon = 0.01))
 
-tlik <- Targeted_Likelihood$new(initial_likelihood,
-                                submodel_type_by_node = "EIC" ,
-                                updater = list(one_dimensional = T,
-                                               constrain_step = T,
-                                               convergence_type = "scaled_var",
-                                               delta_epsilon = list("Y" = 1e-3, "A" = function(x) {
-                                                 res = 0.75/max(abs(x))
-                                                 res <- min(res, 0.1)
-                                                 return(res)
-                                               },
-                                               "Z" = function(x) {
-                                                 res = 0.75/max(abs(x))
-                                                 res <- min(res, 0.1)
-                                                 return(res)
-                                               })))
+# tlik <- Targeted_Likelihood$new(initial_likelihood,
+#                                 submodel_type_by_node = "EIC" ,
+#                                 updater = list(one_dimensional = T,
+#                                                constrain_step = T,
+#                                                convergence_type = "scaled_var",
+#                                                delta_epsilon = list("Y" = 1e-3, "A" = function(x) {
+#                                                  res = 0.75/max(abs(x))
+#                                                  res <- min(res, 0.1)
+#                                                  return(res)
+#                                                },
+#                                                "Z" = function(x) {
+#                                                  res = 0.75/max(abs(x))
+#                                                  res <- min(res, 0.1)
+#                                                  return(res)
+#                                                })))
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
-
-tmle_params[[1]]$clever_covariates()
-tmle_params[[1]]$estimates()
-tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
+#
+# tmle_params[[1]]$clever_covariates()
+# tmle_params[[1]]$estimates()
+# tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 
 tlik$updater$update_step(tlik, tmle_task)
+tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 
-tlik$updater$update(tlik, tmle_task)
+
+# tlik$updater$update(tlik, tmle_task)
 
 
