@@ -80,23 +80,23 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
                                                constrain_step = T,
                                                optim_delta_epsilon = F,
                                                one_dimensional=TRUE,
-                                               delta_epsilon = 0.001))
+                                               delta_epsilon = 0.01))
 tlik$cache$tasks %>% length
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T, initial_likelihood)
 
-tlik$cache$tasks %>% length
-
-
-tmle_params[[1]]$clever_covariates()
-tmle_params[[1]]$estimates()
-tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
-
-tlik$updater$update_step(tlik, tmle_task)
-tlik$cache$tasks %>% length
-
-
-tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "full")
+# tlik$cache$tasks %>% length
+#
+#
+# tmle_params[[1]]$clever_covariates()
+# tmle_params[[1]]$estimates()
+# tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
+#
+# tlik$updater$update_step(tlik, tmle_task)
+# tlik$cache$tasks %>% length
+#
+#
+# tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "full")
 
 
 tlik$updater$update(tlik, tmle_task)
