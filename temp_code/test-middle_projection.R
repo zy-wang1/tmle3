@@ -58,13 +58,6 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
 # tmle_params <- middle_spec$make_params(tmle_task, initial_likelihood, if_projection = T)
 # tmle_params[[1]]$clever_covariates()
 
-tlik <- Targeted_Likelihood$new(initial_likelihood,
-                                submodel_type_by_node = "EIC" ,
-                                updater = list(convergence_type = "sample_size",
-                                               constrain_step = T,
-                                               # optim_delta_epsilon = F,
-                                               one_dimensional=TRUE,
-                                               delta_epsilon = 0.001))
 
 # tlik <- Targeted_Likelihood$new(initial_likelihood,
 #                                 submodel_type_by_node = "EIC" ,
@@ -81,19 +74,31 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
 #                                                  res <- min(res, 0.1)
 #                                                  return(res)
 #                                                })))
+tlik <- Targeted_Likelihood$new(initial_likelihood,
+                                submodel_type_by_node = "EIC" ,
+                                updater = list(convergence_type = "sample_size",
+                                               constrain_step = T,
+                                               optim_delta_epsilon = F,
+                                               one_dimensional=TRUE,
+                                               delta_epsilon = 0.001))
 tlik$cache$tasks %>% length
 
-tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T)
-#
-# tmle_params[[1]]$clever_covariates()
-# tmle_params[[1]]$estimates()
-# tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
+tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T, initial_likelihood)
+
+tlik$cache$tasks %>% length
+
+
+tmle_params[[1]]$clever_covariates()
+tmle_params[[1]]$estimates()
+tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 
 tlik$updater$update_step(tlik, tmle_task)
 tlik$cache$tasks %>% length
-tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 
 
-# tlik$updater$update(tlik, tmle_task)
+tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "full")
+
+
+tlik$updater$update(tlik, tmle_task)
 
 

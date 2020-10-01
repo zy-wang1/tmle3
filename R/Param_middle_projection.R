@@ -45,17 +45,57 @@ Param_middle_projection <- R6Class(
   class = TRUE,
   inherit = Param_base,
   public = list(
-    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y") {
+    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y", static_likelihood = NULL) {
       temp_node_names <- names(observed_likelihood$training_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
       loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
+      tau <- last(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2]))
 
       all_nodes <- names(observed_likelihood$training_task$npsem)
       A_nodes <- grep("A", all_nodes, value = T)
       Z_nodes <- grep("Z", all_nodes, value = T)
       RLY_nodes <- grep("(R|L|Y).[1-9]$", all_nodes, value = T)
+
+      # node_list <- lapply(observed_likelihood$training_task$npsem, function(x) x$variables)
+      #
+      # list_gamma_npsem_1 <- lapply(1:tau, function(t) {
+      #   gamma_npsem(node_list, type = 1, j = t)
+      # })
+      # list_gamma_npsem_2 <- lapply(1:tau, function(t) {
+      #   gamma_npsem(node_list, type = 2, j = t)
+      # })
+      #
+      # list_gamma_task_1 <- lapply(list_gamma_npsem_1, function(each_npsem) {
+      #   raw_data <- observed_likelihood$training_task$data %>% select(-c(id, t)) %>% setDT
+      #   tmle3_Task$new(raw_data, npsem = each_npsem)
+      # })
+      # list_gamma_task_2 <- lapply(list_gamma_npsem_2, function(each_npsem) {
+      #   raw_data <- observed_likelihood$training_task$data %>% select(-c(id, t)) %>% setDT
+      #   tmle3_Task$new(raw_data, npsem = each_npsem)
+      # })
+      #
+      # list_gamma_lkd_1 <- lapply(list_gamma_task_1, function(each_task) {
+      #   middle_spec$make_initial_likelihood(
+      #     each_task,
+      #     learner_list
+      #   )
+      # })
+      # list_gamma_lkd_2 <- lapply(list_gamma_task_2, function(each_task) {
+      #   middle_spec$make_initial_likelihood(
+      #     each_task,
+      #     learner_list
+      #   )
+      # })
+      # list_gamma_lkd_1[[1]]$get_likelihood(list_gamma_task_1[[1]], node = "A_1", fold_number = "full")
+      #
+      # list_gamma_lkd_1[[1]]$factor_list
+
+      private$.static_likelihood <- static_likelihood
+
+
+
 
       private$.update_nodes <- c(Z_nodes, RLY_nodes)
 
@@ -74,7 +114,8 @@ Param_middle_projection <- R6Class(
                                                         intervention_list_treatment = self$intervention_list_treatment,
                                                         intervention_list_control = self$intervention_list_control,
                                                         cf_task_treatment = self$cf_task_treatment,
-                                                        cf_task_control = self$cf_task_control
+                                                        cf_task_control = self$cf_task_control,
+                                                        static_likelihood = self$static_likelihood
                                         ),
                                         projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
@@ -115,7 +156,10 @@ Param_middle_projection <- R6Class(
 
       names(EICs) <- update_nodes
 
-      EICs[[length(EICs) + 1]] <- EICs
+      EICs[[length(EICs) + 1]] <- do.call(cbind, EICs)
+      colnames(EICs[[length(EICs)]]) <- update_nodes
+      EICs[[length(EICs)]] <- as.data.frame(EICs[[length(EICs)]])
+
       names(EICs)[length(EICs)] <- "IC"
 
       return(EICs)
@@ -187,6 +231,9 @@ Param_middle_projection <- R6Class(
     },
     gradient = function(){
       private$.gradient
+    },
+    static_likelihood = function(){
+      private$.static_likelihood
     }
   ),
   private = list(
@@ -198,7 +245,8 @@ Param_middle_projection <- R6Class(
     .supports_outcome_censoring = FALSE,
     .gradient = NULL,
     .submodel_type_supported = c("EIC"),
-    .update_nodes = NULL
+    .update_nodes = NULL,
+    .static_likelihood = NULL
   )
 )
 

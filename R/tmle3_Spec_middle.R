@@ -34,7 +34,9 @@ tmle3_Spec_middle <- R6Class(
 
       return(likelihood)
     },
-    make_params = function(tmle_task, likelihood, if_projection = NULL) {
+    make_params = function(tmle_task, likelihood, if_projection = NULL, static_likelihood = NULL) {
+      if (is.null(static_likelihood)) static_likelihood <- likelihood
+
       temp_names <- names(tmle_task$npsem)
       loc_A <- grep("A", temp_names)
       # ZW todo: in future can be dynamic
@@ -56,9 +58,9 @@ tmle3_Spec_middle <- R6Class(
       # treatment <- define_lf(LF_static, "A", value = treatment_value)
       # control <- define_lf(LF_static, "A", value = control_value)
       if (is.null(if_projection)) {
-        middle <- Param_middle$new(likelihood, treatment, control, outcome_node = last(temp_names))
+        middle <- Param_middle$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood)
       } else if (if_projection) {
-        middle <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names))
+        middle <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood)
       }
 
       tmle_params <- list(middle)

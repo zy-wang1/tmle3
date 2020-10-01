@@ -38,6 +38,36 @@ middle_npsem <- function(node_list, variable_types = NULL) {
   return(npsem)
 }
 
+
+#' @export
+#' @rdname point_tx
+gamma_npsem <- function(node_list, variable_types = NULL, type = 1, j = 1) {
+  temp_node_names <- names(node_list)
+  which_A_nodes <- grep("A", temp_node_names)
+  A_nodes <- temp_node_names[which_A_nodes]
+  last_RZLY_node <- if (type == 1) paste0("Z_", j) else temp_node_names[which(temp_node_names == paste0("Z_", j)) - 1]
+  which_last_RZLY <- which(temp_node_names == last_RZLY_node)
+  # intersect(1:which_last_RZLY, )
+  npsem <- lapply(which_A_nodes, function(each_loc_A) {
+    which_A_nodes_not_needed <- which_A_nodes[which_A_nodes >= each_loc_A]
+    which_predictor_nodes <- setdiff(1:which_last_RZLY, which_A_nodes_not_needed)
+    define_node(temp_node_names[each_loc_A],
+                node_list[[each_loc_A]],
+                temp_node_names[which_predictor_nodes],
+                variable_type = variable_types[[each_loc_A]])
+  })
+
+  # npsem <- list(
+  #   define_node("W", node_list$W, variable_type = variable_types$W),
+  #   define_node("A", node_list$A, c("W"), variable_type = variable_types$A),
+  #   define_node("Y", node_list$Y, c("A", "W"), variable_type = variable_types$Y, scale = TRUE)
+  # )
+
+  return(npsem)
+}
+
+
+
 #' @export
 #' @rdname point_tx
 middle_task <- function(data, node_list, variable_types = NULL, ...) {
