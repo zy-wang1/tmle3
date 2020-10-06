@@ -63,7 +63,9 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
 ###
 
 tmle_params <- middle_spec$make_params(tmle_task, initial_likelihood, static_likelihood = NULL)
-nontargeting <- tmle_params[[1]]$estimates(tmle_task)
+suppressMessages(
+  nontargeting <- tmle_params[[1]]$estimates(tmle_task)
+)
 
 temp_lmed3_nontargeting <- nontargeting$psi
 temp_IC <- nontargeting$IC
@@ -88,7 +90,9 @@ updater <- tmle3_Update_middle$new(maxit = 1, convergence_type = "scaled_var",
 targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)
 tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
 updater$tmle_params <- tmle_params
-test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+suppressMessages(
+  test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+)
 
 firsttargeting <- test$estimates[[1]]
 
@@ -116,7 +120,9 @@ targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)
 tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
 updater$tmle_params <- tmle_params
 
-test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+suppressMessages(
+  test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+)
 tentargeting <- test$estimates[[1]]
 
 temp_lmed3_est <- tentargeting$psi
@@ -139,7 +145,9 @@ targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)
 tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
 updater$tmle_params <- tmle_params
 
-test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+suppressMessages(
+  test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+)
 onestep_targeting <- test$estimates[[1]]
 temp_lmed3_est <- onestep_targeting$psi
 temp_IC <- onestep_targeting$IC
@@ -167,7 +175,9 @@ targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)
 tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
 updater$tmle_params <- tmle_params
 
-test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+suppressMessages(
+  test <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+)
 onestep_targeting_dir <- test$estimates[[1]]
 temp_lmed3_est <- onestep_targeting_dir$psi
 temp_IC <- onestep_targeting_dir$IC
@@ -245,7 +255,9 @@ tmle_params[[1]]$estimates()$psi
 # tlik$cache$tasks %>% lapply(function(x) x$data %>% dim)
 # tlik$updater$epsilons
 
-tlik$updater$update(tlik, tmle_task)
+suppressMessages(
+  tlik$updater$update(tlik, tmle_task)
+)
 
 # tlik$updater$update_step(tlik, tmle_task)
 #
