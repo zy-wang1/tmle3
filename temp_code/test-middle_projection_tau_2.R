@@ -116,4 +116,4 @@ if (inherits(self$updater, "tmle3_Update")) {} else tasks_at_step <- tasks_at_st
 
 
 
-  # the short task can't be updated
+
