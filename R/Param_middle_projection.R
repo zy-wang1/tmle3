@@ -127,6 +127,8 @@ Param_middle_projection <- R6Class(
         fold_number <- "full"
       }
 
+      setattr(self$observed_likelihood, "target_nodes", self$update_nodes)
+      self$observed_likelihood$get_likelihoods(self$observed_likelihood$training_task)
       for (node in self$update_nodes) {
         temp_long_task <- private$.gradient$expand_task(observed_likelihood$training_task, node)
         self$observed_likelihood$get_likelihood(temp_long_task, node, fold_number)
@@ -148,12 +150,19 @@ Param_middle_projection <- R6Class(
           current_variable <- tmle_task$npsem[[loc_node]]$variables
           temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
           temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-          setattr(temp_task, "target_nodes", intersect(names(temp_task$npsem), self$update_nodes))
-          for (node in attr(temp_task, "target_nodes")) {
-            temp_long_task <- private$.gradient$expand_task(temp_task, node)
-            self$observed_likelihood$get_likelihood(temp_long_task, node, fold_number)
+          temp_target_node <- intersect(self$update_nodes, temp_node_names[loc_node])
+          if (length(temp_target_node) == 1) {
+            # for each short task, only the last node (if it is an update_node) needs to be updated
+            setattr(temp_task, "target_nodes", temp_target_node)
+            for (node in attr(temp_task, "target_nodes")) {
+              temp_long_task <- private$.gradient$expand_task(temp_task, node)
+              self$observed_likelihood$get_likelihood(temp_long_task, node, fold_number)
+            }
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+          } else {
+            # A nodes won't get updated
+            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
           }
-          temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
           data.frame(temp_input, output = temp_output) %>% return
         }
       })
@@ -234,7 +243,14 @@ Param_middle_projection <- R6Class(
           current_variable <- tmle_task$npsem[[loc_node]]$variables
           temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
           temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-          temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+          temp_target_node <- intersect(self$update_nodes, temp_node_names[loc_node])
+          if (length(temp_target_node) == 1) {
+            # for each short task, only the last node (if it is an update_node) needs to be updated
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+          } else {
+            # A nodes won't get updated
+            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+          }
           data.frame(temp_input, output = temp_output) %>% return
         }
       })
@@ -281,7 +297,7 @@ Param_middle_projection <- R6Class(
       IC <- rowSums(EIC)
       result <- list(psi =
                        psi
-                       # list_all_predicted_lkd
+                     # list_all_predicted_lkd
                      ,
                      IC = IC, EIC = colMeans(EIC)
                      # , full_EIC = EIC

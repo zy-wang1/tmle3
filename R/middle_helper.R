@@ -14,8 +14,11 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
 
 
-  intervention_nodes <- intersect(union(names(intervention_list_treatment), names(intervention_list_control)),
-                                  names(task$npsem)
+  intervention_nodes <-
+    intersect(
+    union(names(intervention_list_treatment), names(intervention_list_control))
+    ,
+    names(task$npsem)
   )
 
   temp_node_names <- names(task$npsem)
@@ -38,8 +41,8 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   intervention_levels_control <- map_dbl(intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
 
   list_H <- get_obs_H_full(task, obs_data, current_likelihood = static_likelihood,
-                      cf_task_treatment, cf_task_control,
-                      intervention_variables, intervention_levels_treat, intervention_levels_control)
+                           cf_task_treatment, cf_task_control,
+                           intervention_variables, intervention_levels_treat, intervention_levels_control)
 
 
   list_newH <- list()

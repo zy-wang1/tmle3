@@ -110,7 +110,7 @@ Targeted_Likelihood <- R6Class(
         for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
       } else
         # if (self$updater$submodel_type == "logistic")
-        {
+      {
         # first, calculate all updates
         task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon)  # this returns updated (obs) lkd
 

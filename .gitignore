@@ -12,3 +12,5 @@ inst/doc
 
 # meld merge history
 .orig
+
+parallel_first_simulation/*.R
