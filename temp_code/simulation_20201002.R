@@ -18,7 +18,7 @@ source("./temp_code/generate_data.R")
 
 set.seed(1234)
 
-data_sim <- generate_Zheng_data(B = 1000, tau = 2, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 1000, tau = 2, if_LY_misspec = T)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -240,20 +240,20 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T, initial_likelihood)
 tmle_params[[1]]$estimates()$psi
 
-aaa <- tlik$cache$tasks %>% names
-tlik$cache$tasks %>% length
-tlik$cache$tasks %>% lapply(function(x) x$data %>% dim)
-tlik$updater$epsilons
+# aaa <- tlik$cache$tasks %>% names
+# tlik$cache$tasks %>% length
+# tlik$cache$tasks %>% lapply(function(x) x$data %>% dim)
+# tlik$updater$epsilons
 
 tlik$updater$update(tlik, tmle_task)
 
-tlik$updater$update_step(tlik, tmle_task)
-
-tlik$cache$tasks %>% length
-
-bbb <- tlik$cache$tasks %>% names
-setdiff(bbb, aaa)
-tlik$cache$tasks$`5bcaf7aa013cc544cdfe854fc5be0b83`$data$A_2 %>% table
+# tlik$updater$update_step(tlik, tmle_task)
+#
+# tlik$cache$tasks %>% length
+#
+# bbb <- tlik$cache$tasks %>% names
+# setdiff(bbb, aaa)
+# tlik$cache$tasks$`5bcaf7aa013cc544cdfe854fc5be0b83`$data$A_2 %>% table
 
 onestep_projected <- tmle_params[[1]]$estimates()
 
