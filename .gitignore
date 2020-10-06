@@ -5,12 +5,11 @@
 .future
 README.html
 vignettes/*.html
-
 # macOS files
 .DS_Store
 inst/doc
-
 # meld merge history
 .orig
-
 parallel_first_simulation/*.R
+parallel_first_simulation
+temp_output
