@@ -50,6 +50,7 @@ Param_middle <- R6Class(
       super$initialize(observed_likelihood, list(), outcome_node = outcome_node)
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
+      observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F) {
       # self$observed_likelihood -> initial_likelihood
@@ -80,7 +81,7 @@ Param_middle <- R6Class(
         if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
         # get list of all possible predicted lkds
-        obs_data <- tmle_task$data %>% as.data.frame %>% select(-c(id, t))
+        obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
         obs_variable_names <- colnames(obs_data)
         # ZW todo: to handle long format and wide format
 
@@ -159,7 +160,7 @@ Param_middle <- R6Class(
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
       # get list of all possible predicted lkds
-      obs_data <- tmle_task$data %>% as.data.frame %>% select(-c(id, t))
+      obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
       obs_variable_names <- colnames(obs_data)
       # ZW todo: to handle long format and wide format
 
@@ -270,7 +271,9 @@ Param_middle <- R6Class(
         vec_D <- list_D %>% compact %>% pmap_dbl(sum)
         IC <- vec_D
 
-        result <- list(psi = psi, IC = IC, full_IC = list_D)
+        result <- list(psi = psi, IC = IC
+                       # , full_IC = list_D
+                       )
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
         private$.list_D <- list_D

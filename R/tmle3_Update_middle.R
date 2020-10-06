@@ -51,6 +51,7 @@ tmle3_Update_middle <- R6Class(
                           fluctuation_type = c("standard", "weighted"),
                           verbose = FALSE,
                           d_epsilon = 0.01,
+                          if_direction = NULL,
                           submodel_type = "logistic") {
       private$.maxit <- maxit
       private$.cvtmle <- cvtmle
@@ -61,6 +62,7 @@ tmle3_Update_middle <- R6Class(
       private$.fluctuation_type <- match.arg(fluctuation_type)
       private$.verbose <- verbose
       private$.d_epsilon <- d_epsilon
+      private$.if_direction <- if_direction
       private$.submodel_type <- submodel_type
     },
     collapse_covariates = function(estimates, clever_covariates) {
@@ -73,7 +75,7 @@ tmle3_Update_middle <- R6Class(
     update_step = function(likelihood, tmle_task, fold_number = "full") {
       if (self$submodel_type == "onestep") {
         # update likelihoods
-        likelihood$update(new_epsilons = 0, self$step_number, fold_number)  # now full lkd list is updated too
+        likelihood$update(new_epsilon = 0, self$step_number, fold_number)  # now full lkd list is updated too
 
         nothing <- suppressWarnings(lapply(self$tmle_params, function(tmle_param) {
           tmle_param$clever_covariates(tmle_task, fold_number
@@ -88,7 +90,7 @@ tmle3_Update_middle <- R6Class(
 
         if (fold_number != "full") {
           # update full fit likelihoods if we haven't already
-          likelihood$update(new_epsilons = 0, self$step_number, "full")
+          likelihood$update(new_epsilon = 0, self$step_number, "full")
         }
         # increment step count
         private$.step_number <- private$.step_number + 1
@@ -304,8 +306,18 @@ tmle3_Update_middle <- R6Class(
 
       return(updated_likelihoods)
     },
-    apply_update_onestep = function(tmle_task, likelihood, fold_number, d_epsilon) {
+    apply_update_onestep = function(tmle_task, likelihood, fold_number, d_epsilon, if_direction = NULL) {
       update_nodes <- self$update_nodes
+
+      if (!is.null(if_direction)) {
+        list_directions <- lapply(self$tmle_params, function(tmle_param) {
+          tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) > 0, 1, -1) * d_epsilon)
+        })
+      } else {
+        list_directions <- lapply(self$tmle_params, function(tmle_param) {
+          tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
+        })
+      }
 
       # only need the list of D to get (1 + d_epsilon*D(p_k)) * p_k for each p_k
       list_D <- lapply(self$tmle_params, function(tmle_param) {
@@ -345,7 +357,7 @@ tmle3_Update_middle <- R6Class(
       # apply update to all nodes
       updated_likelihoods <- lapply(update_nodes, function(update_node) {
         submodel_data <- all_submodels[[update_node]]
-        updated_likelihood <- (1 + submodel_data$D %*% d_epsilon) * submodel_data$initial
+        updated_likelihood <- (1 + submodel_data$D %*% (list_directions[[1]][[update_node]])) * submodel_data$initial
         # ZW todo: handle multiple targets
 
         # un-scale to handle bounded continuous
@@ -419,7 +431,18 @@ tmle3_Update_middle <- R6Class(
       return(updated_likelihoods)
     },
     # use this to update list of full likelihood: list_all_predicted_lkd
-    apply_update_full_onestep = function(tmle_task, likelihood, fold_number, d_epsilon) {
+    apply_update_full_onestep = function(tmle_task, likelihood, fold_number, d_epsilon, if_direction = NULL) {
+      if (!is.null(if_direction)) {
+        list_directions <- lapply(self$tmle_params, function(tmle_param) {
+          tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) > 0, 1, -1) * d_epsilon)
+        })
+      } else {
+        list_directions <- lapply(self$tmle_params, function(tmle_param) {
+          tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
+        })
+      }
+
+
       update_nodes <- self$update_nodes
       list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
       tmle_task <- likelihood$training_task
@@ -465,7 +488,7 @@ tmle3_Update_middle <- R6Class(
         # for lt = 1, D = (observed - prob) * newH
         D <- (submodel_data_1$observed - submodel_data_1$initial) * submodel_data_1$H
         # p_{k+1} = (1 + D de) pk
-        updated_likelihood_1 <- (1 + D * d_epsilon) * submodel_data_1$initial
+        updated_likelihood_1 <- (1 + D * (list_directions[[1]][[update_node]])) * submodel_data_1$initial
         updated_likelihood <- submodel_data$initial
         updated_likelihood[observed == 1] <- updated_likelihood_1
         updated_likelihood[observed == 0] <- 1 - updated_likelihood_1  # list of probs are symmetric for now
@@ -593,6 +616,9 @@ tmle3_Update_middle <- R6Class(
     },
     d_epsilon = function() {
       return(private$.d_epsilon)
+    },
+    if_direction = function() {
+      return(private$.if_direction)
     }
   ),
   private = list(
@@ -609,6 +635,7 @@ tmle3_Update_middle <- R6Class(
     .fluctuation_type = NULL,
     .verbose = FALSE,
     .submodel_type = NULL,
-    .d_epsilon = 0.01
+    .d_epsilon = 0.01,
+    .if_direction = NULL
   )
 )

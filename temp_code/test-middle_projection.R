@@ -85,15 +85,15 @@ tlik$cache$tasks %>% length
 
 tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T, initial_likelihood)
 
-# tlik$cache$tasks %>% length
+tlik$cache$tasks %>% length
 #
 #
 # tmle_params[[1]]$clever_covariates()
-# tmle_params[[1]]$estimates()
+tmle_params[[1]]$estimates()
 # tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "validation")
 #
-# tlik$updater$update_step(tlik, tmle_task)
-# tlik$cache$tasks %>% length
+tlik$updater$update_step(tlik, tmle_task)
+tlik$cache$tasks %>% length
 #
 #
 # tmle_params[[1]]$gradient$compute_component(tmle_task, "L_1", fold_number = "full")

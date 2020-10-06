@@ -47,8 +47,7 @@ Targeted_Likelihood <- R6Class(
       # todo: rethink which tasks need updates here
       # tasks_at_step <- self$cache$tasks_at_step(step_number)
       tasks_at_step <- self$cache$tasks
-      # tasks_at_step <- tasks_at_step[map_dbl(tasks_at_step, ~nrow(.x$data)) == nrow(self$training_task$data)]
-
+      if (inherits(self$updater, "tmle3_Update")) {} else tasks_at_step <- tasks_at_step[map_dbl(tasks_at_step, ~nrow(.x$data)) == nrow(self$training_task$data)]
 
 
       if (!inherits(self$updater, "tmle3_Update_middle")  ) {
@@ -67,15 +66,22 @@ Targeted_Likelihood <- R6Class(
 
         tasks_at_step <- tasks_at_step[to_update]
         # first, calculate all updates
-        task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon, update_node)
+        # task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon, update_node)
+        # ZW: there is no point to update a partial task, if update_node is not in this partial task
+        task_updates <- tasks_at_step %>% lapply(function(x) if (update_node %in% names(x$npsem)) {
+          self$updater$apply_update(x, self, fold_number, new_epsilon, update_node)
+        })
+
 
         # then, store all updates
         for (task_index in seq_along(tasks_at_step)) {
           task <- tasks_at_step[[task_index]]
           updated_values <- task_updates[[task_index]]
 
-          likelihood_factor <- self$factor_list[[update_node]]
-          self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values, node = update_node)
+          if (!is.null(updated_values)) {
+            likelihood_factor <- self$factor_list[[update_node]]
+            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values, node = update_node)
+          }
         }
         # for (task in tasks_at_step) {
         #   all_submodels <- self$updater$generate_submodel_data(self, task, fold_number)
@@ -87,7 +93,7 @@ Targeted_Likelihood <- R6Class(
         # }
       } else if (self$updater$submodel_type == "onestep") {  # for tmle3_Update_middle
         # first, calculate all updates
-        task_updates <- lapply(tasks_at_step, self$updater$apply_update_onestep, self, fold_number, self$updater$d_epsilon)  # this returns updated (obs) lkd
+        task_updates <- lapply(tasks_at_step, self$updater$apply_update_onestep, self, fold_number, self$updater$d_epsilon, self$updater$if_direction)  # this returns updated (obs) lkd
 
         # then, store all updates
         for (task_index in seq_along(tasks_at_step)) {
@@ -95,12 +101,12 @@ Targeted_Likelihood <- R6Class(
           updated_values <- task_updates[[task_index]]
           for (node in names(updated_values)) {
             likelihood_factor <- self$factor_list[[node]]
-            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
+            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]], node)
           }
         }
 
         update_nodes <- self$updater$update_nodes
-        full_updates <- self$updater$apply_update_full_onestep(self$training_task, self, fold_number, self$updater$d_epsilon)  # this returns updated (full) lkd
+        full_updates <- self$updater$apply_update_full_onestep(self$training_task, self, fold_number, self$updater$d_epsilon, self$updater$if_direction)  # this returns updated (full) lkd
         for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
       } else
         # if (self$updater$submodel_type == "logistic")
@@ -114,7 +120,7 @@ Targeted_Likelihood <- R6Class(
           updated_values <- task_updates[[task_index]]
           for (node in names(updated_values)) {
             likelihood_factor <- self$factor_list[[node]]
-            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
+            self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]], node)
           }
         }
 

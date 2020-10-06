@@ -13,7 +13,10 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   # cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(task)[[1]]
   # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
 
-  intervention_nodes <- union(names(intervention_list_treatment), names(intervention_list_control))
+
+  intervention_nodes <- intersect(union(names(intervention_list_treatment), names(intervention_list_control)),
+                                  names(task$npsem)
+  )
 
   temp_node_names <- names(task$npsem)
   loc_A <- grep("A", temp_node_names)
@@ -24,7 +27,7 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   Y <- task$get_tmle_node(last(temp_node_names), format = T)[[1]]
 
   # get list of all possible predicted lkds
-  obs_data <- task$data %>% as.data.frame %>% select(-c(id, t))
+  obs_data <- task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
   obs_variable_names <- colnames(obs_data)
   # ZW todo: to handle long format and wide format
   # ZW todo: see if observed_likelihood needs to change to targeted likelihood

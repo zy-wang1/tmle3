@@ -1,4 +1,4 @@
-self <- tlik$updater
+self <- updater
 
 update_nodes <- self$update_nodes
 
@@ -10,8 +10,8 @@ names(na_epsilons) <- update_nodes
 epsilons <- self$epsilons
 epsilons[[current_step]] <- na_epsilons
 
-tlik$cache$tasks %>% length
-tlik$cache$tasks %>% lapply(function(x) x$data$A_1 %>% table)
+# tlik$cache$tasks %>% length
+# tlik$cache$tasks %>% lapply(function(x) x$data$A_1 %>% table)
 
 for (update_node in update_nodes) {
   # get new submodel fit

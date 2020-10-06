@@ -58,7 +58,7 @@ tmle3_Spec_middle <- R6Class(
       # treatment <- define_lf(LF_static, "A", value = treatment_value)
       # control <- define_lf(LF_static, "A", value = control_value)
       if (is.null(if_projection)) {
-        middle <- Param_middle$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood)
+        middle <- Param_middle$new(likelihood, treatment, control, outcome_node = last(temp_names))
       } else if (if_projection) {
         middle <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood)
       }
