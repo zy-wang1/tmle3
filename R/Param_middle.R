@@ -53,39 +53,27 @@ Param_middle <- R6Class(
       # observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F) {
-      # self$observed_likelihood -> initial_likelihood
-      # self$ -> tmle_params$
-
-      # if update == T, calculate based on current full lkd, and write .list_newH
-      # if update == F, cache or calculate based on current full lkd in targeted likelihood
       if (!is.null(private$.list_newH$fold_number) & update == F) {
         return(private$.list_newH$fold_number)
       } else {
         if (is.null(tmle_task)) {
           tmle_task <- self$observed_likelihood$training_task
         }
-
         intervention_nodes <- union(names(self$intervention_list_treatment), names(self$intervention_list_control))
-
         # todo: extend for stochastic
         cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(tmle_task)[[1]]
         cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
 
-        Y <- tmle_task$get_tmle_node(self$outcome_node)
-
-        # all not A, not t=0 nodes
         temp_node_names <- names(tmle_task$npsem)
         loc_A <- grep("A", temp_node_names)
         loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
         loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
         if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
-        # get list of all possible predicted lkds
         obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
         obs_variable_names <- colnames(obs_data)
         # ZW todo: to handle long format and wide format
 
-        # ZW todo: see if observed_likelihood needs to change to targeted likelihood
         private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
         # only calculate list of lkd here when it is null; otherwise only update it in updater$apply_update_all
         if (!is.null(private$.list_all_predicted_lkd)) {
@@ -104,7 +92,6 @@ Param_middle <- R6Class(
           private$.list_all_predicted_lkd <- list_all_predicted_lkd
         }
 
-
         intervention_variables <- map_chr(tmle_task$npsem[intervention_nodes], ~.x$variables)
         intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
         intervention_levels_treat <- map_dbl(self$intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
@@ -115,9 +102,6 @@ Param_middle <- R6Class(
         list_H <- get_obs_H(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
                             cf_task_treatment, cf_task_control,
                             intervention_variables, intervention_levels_treat, intervention_levels_control)
-        # list_H_raw <- get_obs_H_raw(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
-        #                     cf_task_treatment, cf_task_control,
-        #                     intervention_variables, intervention_levels_treat, intervention_levels_control)
         list_Q_1 <- get_obs_Q(tmle_task, obs_data, list_H,
                               intervention_variables, intervention_levels_treat, intervention_levels_control,
                               list_all_predicted_lkd,
@@ -128,47 +112,35 @@ Param_middle <- R6Class(
                               lt = 0)
 
         list_newH <- list()
-        # list_newH_raw <- list()
-        for (ind_var in 1:length(list_H)) {
-          if(!is.null(list_H[[ind_var]])) {
-            list_newH[[ind_var]] <- ( list_H[[ind_var]] * (list_Q_1[[ind_var]] - list_Q_0[[ind_var]]) ) %>% as.matrix
-            # list_newH_raw[[ind_var]] <- ( list_H_raw[[ind_var]] * (list_Q_1[[ind_var]] - list_Q_0[[ind_var]]) ) %>% as.matrix
+        for (loc_node in 1:length(list_H)) {
+          if(!is.null(list_H[[loc_node]])) {
+            list_newH[[loc_node]] <- ( list_H[[loc_node]] * (list_Q_1[[loc_node]] - list_Q_0[[loc_node]]) ) %>% as.matrix
           }
         }
         names(list_newH) <- temp_node_names
-        # names(list_newH_raw) <- temp_node_names
 
         private$.list_newH$fold_number <- list_newH
-        # private$.list_newH_raw$fold_number <- list_newH_raw
         return(list_newH)
       }
 
 
     },
     estimates = function(tmle_task = NULL, fold_number = "full", update = F) {
-      # self$observed_likelihood -> initial_likelihood
-      # self$ -> tmle_params[[1]]$
-
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
       }
-
       intervention_nodes <- union(names(self$intervention_list_treatment), names(self$intervention_list_control))
 
       # todo: extend for stochastic
       cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(tmle_task)[[1]]
       cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
 
-      Y <- tmle_task$get_tmle_node(self$outcome_node)
-
-      # all not A, not t=0 nodes
       temp_node_names <- names(tmle_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
       loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
-      # get list of all possible predicted lkds
       obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
       obs_variable_names <- colnames(obs_data)
       # ZW todo: to handle long format and wide format
@@ -191,9 +163,7 @@ Param_middle <- R6Class(
         private$.list_all_predicted_lkd <- list_all_predicted_lkd
       }
 
-      # recalculate if list_D or result is null, or if we force it to update
-      # make sure we force update this after each updating step
-      # this helps speed up updater$check_convergence
+      # make sure we force update this after each updating step; this helps speed up updater$check_convergence
       if (!is.null(private$.list_D) & !is.null(private$.result) & update == F) {
         return(private$.result)
       } else {
@@ -240,36 +210,32 @@ Param_middle <- R6Class(
         list_newH <- self$clever_covariates(tmle_task, fold_number)
         # list_newH_raw <- self$list_newH_raw$fold_number
 
-        list_D <- list_D_trt <- list_D_ctrl <- list()
-        for (ind_var in 1:length(list_newH)) {
-          if(!is.null(list_newH[[ind_var]])) {
+        list_D <- list_D_null <- list_D_fit <- list()
+        for (loc_node in 1:length(list_newH)) {
+          if(!is.null(list_newH[[loc_node]])) {
             # ZW todo: for discretized variables
-            current_ind <- (obs_data[[tmle_task$npsem[[ind_var]]$variables]] == 1)*1
-            # temp_p <- self$observed_likelihood$get_likelihoods(tmle_task, temp_node_names[ind_var])
-            if (ind_var %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[ind_var]) else
-              temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[ind_var])
+            current_ind <- (obs_data[[tmle_task$npsem[[loc_node]]$variables]] == 1)*1
+            # temp_p <- self$observed_likelihood$get_likelihoods(tmle_task, temp_node_names[loc_node])
+            if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node]) else
+              temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node])
             temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)
-            list_D[[ind_var]] <- (current_ind - temp_p) *list_newH[[ind_var]]
-
+            list_D[[loc_node]] <- (current_ind - temp_p) *list_newH[[loc_node]]
+            list_D_fit[[loc_node]] <- (1 - temp_p) *list_newH[[loc_node]]
             # e.g. L nodes, ind_A all 1's for treat cf task
-            if (ind_var %in% loc_Z) {
-              list_D_trt[[ind_var]] <- rep(0, tmle_task$nrow)
-              # list_D_ctrl[[ind_var]] <- (current_ind - temp_p) *list_newH_raw[[ind_var]]
-              list_D_ctrl[[ind_var]] <- rep(0, tmle_task$nrow)
+            if (loc_node %in% loc_Z) {
+              list_D_null[[loc_node]] <- rep(0, tmle_task$nrow)
             } else {
-              # list_D_trt[[ind_var]] <- (current_ind - temp_p) *list_newH_raw[[ind_var]]
-              list_D_trt[[ind_var]] <- rep(0, tmle_task$nrow)
-              list_D_ctrl[[ind_var]] <- rep(0, tmle_task$nrow)
+              list_D_null[[loc_node]] <- rep(0, tmle_task$nrow)
             }
           }
         }
-        # list_D[[1]] <-
-          # list_D_trt[[1]] <- list_D_ctrl[[1]] <-
-          # vec_est - psi
+        list_D[[1]] <-
+        # list_D_trt[[1]] <- list_D_ctrl[[1]] <-
+        vec_est - psi
         # # for debug the last node
         # list_D[[length(list_D)]] <- length(list_D) <- length(list_D) <- rep(0, vec_est)
 
-        names(list_D) <- names(list_D_trt) <- names(list_D_ctrl) <- names(list_newH)
+        names(list_D) <- names(list_D_null) <- names(list_D_fit) <- names(list_newH)
 
         vec_D <- list_D %>% compact %>% pmap_dbl(sum)
         IC <- vec_D
@@ -280,8 +246,8 @@ Param_middle <- R6Class(
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
         private$.list_D <- list_D
-        private$.list_D_trt <- list_D_trt
-        private$.list_D_ctrl <- list_D_ctrl
+        private$.list_D_null <- list_D_null
+        private$.list_D_fit <- list_D_fit
         private$.result <- result
 
         return(result)
@@ -311,11 +277,11 @@ Param_middle <- R6Class(
     list_D = function() {
       return(private$.list_D)
     },
-    list_D_trt = function() {
-      return(private$.list_D_trt)
+    list_D_null = function() {
+      return(private$.list_D_null)
     },
-    list_D_ctrl = function() {
-      return(private$.list_D_ctrl)
+    list_D_fit = function() {
+      return(private$.list_D_fit)
     },
     update_nodes = function() {
       if (is.null(tmle_task)) {
@@ -343,8 +309,8 @@ Param_middle <- R6Class(
     .list_newH = NULL,  # the clever covariates
     .list_newH_raw = NULL,  # the clever covariates, without A indicators
     .list_D = NULL,
-    .list_D_trt = NULL,
-    .list_D_ctrl = NULL,
+    .list_D_null = NULL,
+    .list_D_fit = NULL,
     .result = NULL
   )
 )

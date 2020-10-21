@@ -44,8 +44,10 @@ tmle3_Spec_middle <- R6Class(
       control_value <- self$options$control_level
       A_levels <- tmle_task$npsem[[ temp_names[loc_A[1]] ]]$variable_type$levels
       if (!is.null(A_levels)) {
-        treatment_value <- factor(treatment_value, levels = A_levels)
-        control_value <- factor(control_value, levels = A_levels)
+        treatment_value <- treatment_value
+          # factor(treatment_value, levels = A_levels)
+        control_value <- control_value
+          # factor(control_value, levels = A_levels)
       }
       # list of intervention nodes as LF_static objects
       treatment <- lapply(temp_names[loc_A], function(eachA) {

@@ -383,15 +383,6 @@ tmle3_Update_middle <- R6Class(
 
       if (!is.null(if_direction)) {
         if (self$step_number == 0) {
-          # if ((tmle_params[[1]]$list_D %>% lapply(mean) %>% unlist %>% mean(na.rm = T)) > 0) {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
-          #   })
-          # } else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) -1*d_epsilon)
-          #   })
-          # }
           list_directions <- lapply(self$tmle_params, function(tmle_param) {
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
             # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
@@ -399,33 +390,16 @@ tmle3_Update_middle <- R6Class(
           private$.list_directions_ini <- list_directions
         } else {
           # TODO: multiple targets
-          list_directions <- self$list_directions_ini
+          # list_directions <- self$list_directions_ini
+          list_directions <- lapply(self$tmle_params, function(tmle_param) {
+            tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
+            # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
+          })
           list_if_stop <- lapply(self$tmle_params, function(tmle_param) {
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) < sd(x) / sqrt(length(x)) / min(log(length(x)), 10), 0, 1))
           })
           list_directions[[1]] <- map2(list_directions[[1]], list_if_stop[[1]], prod)
-          # if ((tmle_params[[1]]$list_D %>% lapply(mean) %>% unlist %>% mean(na.rm = T)) > 0) {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
-          #   })
-          # } else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) -1*d_epsilon)
-          #   })
-          # }
-          # if (identical(private$.list_directions_ini, list_directions)) {} else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) 0)
-          #   })
-          # }
-          # private$.if_local_max <- T
-          # list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #   # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) > 0, 1, -1) * d_epsilon)
-          #   tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) > 0, 1, -1) * d_epsilon)
-          # })
-          # if_still_update <- map2_lgl(list_directions[[1]], self$list_directions_ini[[1]], identical)  # keep updating if its on the same direction
-          # list_directions[[1]] <- lapply(seq_along(list_directions[[1]]), function(i) ifelse(if_still_update[i] & (!is.null(list_directions[[1]][[i]])), list_directions[[1]][[i]], 0))
-          # names(list_directions[[1]]) <- names(self$list_directions_ini[[1]])
+          private$.record_direction[[self$step_number]] <- list_directions[[1]]
         }
       } else {
         list_directions <- lapply(self$tmle_params, function(tmle_param) {
@@ -436,25 +410,27 @@ tmle3_Update_middle <- R6Class(
       # only need the list of D to get (1 + d_epsilon*D(p_k)) * p_k for each p_k
       # decide depending on tmle_task data
       list_D <- lapply(self$tmle_params, function(tmle_param) {
-        check_unique <- do.call(cbind, lapply(tmle_param$intervention_list_treatment %>% names, tmle_task$get_tmle_node)) %>% unique
+        check_unique <- do.call(cbind, lapply(tmle_param$intervention_list_treatment %>% names, function(aname) tmle_task$get_tmle_node(aname) %>% as.character %>% as.numeric)) %>% unique
         intervention_levels_treat <- map_dbl(tmle_param$intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
         intervention_levels_control <- map_dbl(tmle_param$intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
         if (nrow(check_unique) == 1) {
           if(sum(check_unique == intervention_levels_treat) > 0) {
             # treat tasks are updated in non-Z nodes
-            temp_D <- tmle_param$list_D
+            temp_D <- tmle_param$list_D_fit
             loc_Z <- which(sapply(names(temp_D), function(s) strsplit(s, "_")[[1]][1] == "Z"))
-            for (i in loc_Z) temp_D[[i]] <- rep(0, length(temp_D[[i]]))
+            for (i in loc_Z) temp_D[[i]] <- rep(0, length(temp_D[[i]])) %>% as.matrix
             return(temp_D)
-          } else {
+          } else if(sum(check_unique == intervention_levels_control) > 0) {
             # control tasks are updated in Z nodes
-            temp_D <- tmle_param$list_D
-            loc_RLY <- which(sapply(names(temp_D), function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
-            for (i in loc_RLY) temp_D[[i]] <- rep(0, length(temp_D[[i]]))
+            temp_D <- tmle_param$list_D_fit
+            loc_RLY0 <- which(sapply(names(temp_D), function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y")
+                                     # & strsplit(s, "_")[[1]][2] != 0
+                                     ))
+            for (i in loc_RLY0) temp_D[[i]] <- rep(0, length(temp_D[[i]])) %>% as.matrix
             return(temp_D)
           }
         } else {
-          tmle_param$list_D_trt %>% return  # no update for observed task; not used any where
+          tmle_param$list_D_null %>% return  # no update for observed task; not used any where
         }
       })
 
@@ -511,15 +487,6 @@ tmle3_Update_middle <- R6Class(
     apply_update_full_onestep = function(tmle_task, likelihood, fold_number, d_epsilon, if_direction = NULL) {
       if (!is.null(if_direction)) {
         if (self$step_number == 0) {
-          # if ((tmle_params[[1]]$list_D %>% lapply(mean) %>% unlist %>% mean(na.rm = T)) > 0) {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
-          #   })
-          # } else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) -1*d_epsilon)
-          #   })
-          # }
           list_directions <- lapply(self$tmle_params, function(tmle_param) {
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
             # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
@@ -527,42 +494,21 @@ tmle3_Update_middle <- R6Class(
           private$.list_directions_ini <- list_directions
         } else {
           # TODO: multiple targets
-          list_directions <- self$list_directions_ini
+          # list_directions <- self$list_directions_ini
+          list_directions <- lapply(self$tmle_params, function(tmle_param) {
+            tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
+            # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
+          })
           list_if_stop <- lapply(self$tmle_params, function(tmle_param) {
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) < sd(x) / sqrt(length(x)) / min(log(length(x)), 10), 0, 1))
           })
           list_directions[[1]] <- map2(list_directions[[1]], list_if_stop[[1]], prod)
-
-
-          # if ((tmle_params[[1]]$list_D %>% lapply(mean) %>% unlist %>% mean(na.rm = T)) > 0) {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
-          #   })
-          # } else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) -1*d_epsilon)
-          #   })
-          # }
-          # if (identical(private$.list_directions_ini, list_directions)) {} else {
-          #   list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #     tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) 0)
-          #   })
-          #   # private$.if_local_max <- T
-          # }
-          # list_directions <- lapply(self$tmle_params, function(tmle_param) {
-          #   # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) > 0, 1, -1) * d_epsilon)
-          #   tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) > 0, 1, -1) * d_epsilon)
-          # })
-          # if_still_update <- map2_lgl(list_directions[[1]], self$list_directions_ini[[1]], identical)  # keep updating if its on the same direction
-          # list_directions[[1]] <- lapply(seq_along(list_directions[[1]]), function(i) ifelse(if_still_update[i] & (!is.null(list_directions[[1]][[i]])), list_directions[[1]][[i]], 0))
-          # names(list_directions[[1]]) <- names(self$list_directions_ini[[1]])
         }
-      } else {
+      } else {  # if in fixed possitive direction mode
         list_directions <- lapply(self$tmle_params, function(tmle_param) {
           tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) d_epsilon)
         })
       }
-
 
       update_nodes <- self$update_nodes
       list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
@@ -617,9 +563,9 @@ tmle3_Update_middle <- R6Class(
           prob_trt_or_ctrl = temp_prob_trt_or_ctrl
         )
 
-        D <- (submodel_data$observed -
-                submodel_data$initial
-                # submodel_data$prob_trt_or_ctrl
+        D <- (rep(1, length(submodel_data$observed)) -
+                # submodel_data$initial
+                submodel_data$prob_trt_or_ctrl
               ) * submodel_data$H  # H will be zero for nuisance lkds
         # p_{k+1} = (1 + D de) pk
         updated_likelihood <- (1 + D * (list_directions[[1]][[update_node]])) * submodel_data$initial  # nuisance won't change
@@ -761,6 +707,9 @@ tmle3_Update_middle <- R6Class(
     },
     if_local_max = function() {
       return(private$.if_local_max)
+    },
+    record_direction = function() {
+      return(private$.record_direction)
     }
   ),
   private = list(
@@ -780,6 +729,7 @@ tmle3_Update_middle <- R6Class(
     .d_epsilon = 0.01,
     .if_direction = NULL,
     .list_directions_ini = NULL,
-    .if_local_max = NULL
+    .if_local_max = NULL,
+    .record_direction = list()
   )
 )
