@@ -387,7 +387,12 @@ tmle3_Update_middle <- R6Class(
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
             # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
           })
+          list_if_stop <- lapply(self$tmle_params, function(tmle_param) {
+            tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) < sd(x) / sqrt(length(x)) / min(log(length(x)), 10), 0, 1))
+          })
+          list_directions[[1]] <- map2(list_directions[[1]], list_if_stop[[1]], prod)
           private$.list_directions_ini <- list_directions
+          if (sum(!(unlist(list_directions[[1]]) %in% c(0, 1))) == 0) private$.if_by_dim_conv <- T  # if all dimensions converge on their own
         } else {
           # TODO: multiple targets
           # list_directions <- self$list_directions_ini
@@ -400,6 +405,7 @@ tmle3_Update_middle <- R6Class(
           })
           list_directions[[1]] <- map2(list_directions[[1]], list_if_stop[[1]], prod)
           private$.record_direction[[self$step_number]] <- list_directions[[1]]
+          if (sum(!(unlist(list_directions[[1]]) %in% c(0, 1))) == 0) private$.if_by_dim_conv <- T  # if all dimensions converge on their own
         }
       } else {
         list_directions <- lapply(self$tmle_params, function(tmle_param) {
@@ -491,7 +497,12 @@ tmle3_Update_middle <- R6Class(
             tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) >= 0, 1, -1) * d_epsilon)
             # tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(log(1 + d_epsilon*x)) >= 0, 1, -1) * d_epsilon)
           })
-          private$.list_directions_ini <- list_directions
+          list_if_stop <- lapply(self$tmle_params, function(tmle_param) {
+            tmle_param$list_D %>% lapply(function(x) if(!is.null(x)) ifelse(mean(x) < sd(x) / sqrt(length(x)) / min(log(length(x)), 10), 0, 1))
+          })
+          list_directions[[1]] <- map2(list_directions[[1]], list_if_stop[[1]], prod)
+          # private$.list_directions_ini <- list_directions
+          # if (sum(!(unlist(list_directions[[1]]) %in% c(0, 1))) == 0) private$.if_by_dim_conv <- T  # if all dimensions converge on their own
         } else {
           # TODO: multiple targets
           # list_directions <- self$list_directions_ini
@@ -612,7 +623,7 @@ tmle3_Update_middle <- R6Class(
       }
       # added convergence rule: local maximum reached
       if (!is.null(self$if_local_max)) return(self$if_local_max) else {
-        return(all(ED_criterion <= ED_threshold))
+        return(all(ED_criterion <= ED_threshold) | self$if_by_dim_conv)
       }
     },
     update = function(likelihood, tmle_task) {
@@ -710,6 +721,9 @@ tmle3_Update_middle <- R6Class(
     },
     record_direction = function() {
       return(private$.record_direction)
+    },
+    if_by_dim_conv = function() {
+      return(private$.if_by_dim_conv)
     }
   ),
   private = list(
@@ -730,6 +744,7 @@ tmle3_Update_middle <- R6Class(
     .if_direction = NULL,
     .list_directions_ini = NULL,
     .if_local_max = NULL,
-    .record_direction = list()
+    .record_direction = list(),
+    .if_by_dim_conv = F
   )
 )

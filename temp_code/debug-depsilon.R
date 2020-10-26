@@ -4,7 +4,7 @@ n_sim <- 8 *2
 nCores <- 8
 
 timepoint <- 1
-if_misspec <- T
+if_misspec <- F
 
 data_truth <- generate_Zheng_data(B = 100000, tau = timepoint, seed = 202008, setAM = c(1, 0), if_LY_misspec = if_misspec)
 truth <- data_truth[[timepoint + 1]]$Y %>% mean
@@ -101,9 +101,10 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
          one = test$estimates[[1]]$psi,
          step = test$steps,
          ed = test$ED,
-         threshold = sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000),
-         last_dir = updater$record_direction %>% last %>% unlist,
-         dir10 = ifelse_vec(length(updater$record_direction) >= 10, updater$record_direction[[10]] %>% unlist, 0)
+         threshold = sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000)
+         # ,
+         # last_dir = updater$record_direction %>% last %>% unlist,
+         # dir10 = ifelse_vec(length(updater$record_direction) >= 10, updater$record_direction[[10]] %>% unlist, 0)
          )
   )
 })
@@ -145,7 +146,7 @@ if_converge <- (do.call(rbind, results)[, 3] %>% unlist) < 50
 (do.call(rbind, results) %>% as.matrix)[!if_converge, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth)^2 %>% mean)
 (do.call(rbind, results) %>% as.matrix)[!if_converge, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth) %>% sd)
 (do.call(rbind, results) %>% as.matrix)[!if_converge, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth) %>% abs %>% mean)
-
+(do.call(rbind, results) %>% as.matrix)[!if_converge, -c(3:length(results))]
 
 sum(!if_converge)
 sum((if_Z) & (!if_converge))
