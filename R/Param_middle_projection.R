@@ -158,10 +158,10 @@ Param_middle_projection <- R6Class(
               temp_long_task <- private$.gradient$expand_task(temp_task, node)
               self$observed_likelihood$get_likelihood(temp_long_task, node, fold_number)
             }
-            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           } else {
             # A nodes won't get updated
-            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           }
           data.frame(temp_input, output = temp_output) %>% return
         }
@@ -246,10 +246,10 @@ Param_middle_projection <- R6Class(
           temp_target_node <- intersect(self$update_nodes, temp_node_names[loc_node])
           if (length(temp_target_node) == 1) {
             # for each short task, only the last node (if it is an update_node) needs to be updated
-            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           } else {
             # A nodes won't get updated
-            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = "full")  # corresponding outputs
+            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           }
           data.frame(temp_input, output = temp_output) %>% return
         }

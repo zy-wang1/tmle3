@@ -322,7 +322,12 @@ tmle3_Update_middle <- R6Class(
     # use this to update list of full likelihood: list_all_predicted_lkd
     apply_update_full = function(tmle_task, likelihood, fold_number, all_epsilon) {
       update_nodes <- self$update_nodes
-      list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
+      if (fold_number == "full") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
+      } else if (fold_number == "validation") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd_val
+      }
+
       tmle_task <- likelihood$training_task
       temp_node_names <- names(tmle_task$npsem)
       obs_data <- tmle_task$data
@@ -522,7 +527,12 @@ tmle3_Update_middle <- R6Class(
       }
 
       update_nodes <- self$update_nodes
-      list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
+      if (fold_number == "full") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
+      } else if (fold_number == "validation") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd_val
+      }
+
       tmle_task <- likelihood$training_task
       temp_node_names <- names(tmle_task$npsem)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))

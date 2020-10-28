@@ -108,7 +108,11 @@ Targeted_Likelihood <- R6Class(
         }
 
         full_updates <- self$updater$apply_update_full_onestep(self$training_task, self, fold_number, self$updater$d_epsilon, self$updater$if_direction)  # this returns updated (full) lkd
-        for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
+        if (fold_number == "full") {
+          for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
+        } else if (fold_number == "validation") {
+          for (update_node in update_nodes) private$.list_all_predicted_lkd_val[[update_node]]$output <- full_updates[[update_node]]
+        }
       } else
         # if (self$updater$submodel_type == "logistic")
       {
@@ -127,7 +131,11 @@ Targeted_Likelihood <- R6Class(
 
         update_nodes <- self$updater$update_nodes
         full_updates <- self$updater$apply_update_full(self$training_task, self, fold_number, new_epsilon)  # this returns updated (full) lkd
-        for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
+        if (fold_number == "full") {
+          for (update_node in update_nodes) private$.list_all_predicted_lkd[[update_node]]$output <- full_updates[[update_node]]
+        } else if (fold_number == "validation") {
+          for (update_node in update_nodes) private$.list_all_predicted_lkd_val[[update_node]]$output <- full_updates[[update_node]]
+        }
       }
     },
     sync_task = function(tmle_task, fold_number = "full", check = T, max_step = NULL){

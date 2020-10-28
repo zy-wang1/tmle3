@@ -125,7 +125,7 @@ middle_likelihood <- function(tmle_task, learner_list) {
 
   likelihood_def <- Likelihood$new(factor_list)
   likelihood <- likelihood_def$train(tmle_task)
-  temp <- likelihood$list_all_predicted_lkd
+  # temp <- likelihood$list_all_predicted_lkd
   return(likelihood)
 }
 

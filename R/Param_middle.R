@@ -74,22 +74,14 @@ Param_middle <- R6Class(
         obs_variable_names <- colnames(obs_data)
         # ZW todo: to handle long format and wide format
 
-        private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
-        # only calculate list of lkd here when it is null; otherwise only update it in updater$apply_update_all
-        if (!is.null(private$.list_all_predicted_lkd)) {
-          list_all_predicted_lkd <- private$.list_all_predicted_lkd
-        } else {
-          list_all_predicted_lkd <- lapply(1:length(temp_node_names), function(loc_node) {
-            if (loc_node > 1) {
-              # currently only support univariate node for t>0
-              current_variable <- tmle_task$npsem[[loc_node]]$variables
-              temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
-              temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-              temp_output <- self$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = fold_number)  # corresponding outputs
-              data.frame(temp_input, output = temp_output) %>% return
-            }
-          })
-          private$.list_all_predicted_lkd <- list_all_predicted_lkd
+        if (fold_number == "full") {
+          list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
+          temp <- self$observed_likelihood$list_all_predicted_lkd_val
+          rm(temp)
+        } else if (fold_number == "validation") {
+          list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd_val
+          temp <- self$observed_likelihood$list_all_predicted_lkd
+          rm(temp)
         }
 
         intervention_variables <- map_chr(tmle_task$npsem[intervention_nodes], ~.x$variables)
@@ -145,22 +137,12 @@ Param_middle <- R6Class(
       obs_variable_names <- colnames(obs_data)
       # ZW todo: to handle long format and wide format
 
-      private$.list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
-      # only calculate list of lkd here when it is null; otherwise only update it in updater$apply_update_all
-      if (!is.null(private$.list_all_predicted_lkd)) {
-        list_all_predicted_lkd <- private$.list_all_predicted_lkd
-      } else {
-        list_all_predicted_lkd <- lapply(1:length(temp_node_names), function(loc_node) {
-          if (loc_node > 1) {
-            # currently only support univariate node for t>0
-            current_variable <- tmle_task$npsem[[loc_node]]$variables
-            temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
-            temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
-            temp_output <- self$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number = fold_number)  # corresponding outputs
-            data.frame(temp_input, output = temp_output) %>% return
-          }
-        })
-        private$.list_all_predicted_lkd <- list_all_predicted_lkd
+      if (fold_number == "full") {
+        list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
+      } else if (fold_number == "validation") {
+        list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd_val
+        temp <- self$observed_likelihood$list_all_predicted_lkd
+        rm(temp)
       }
 
       # make sure we force update this after each updating step; this helps speed up updater$check_convergence
@@ -265,9 +247,6 @@ Param_middle <- R6Class(
     cf_likelihood_control = function() {
       return(private$.cf_likelihood_control)
     },
-    list_all_predicted_lkd = function() {
-      return(private$.list_all_predicted_lkd)
-    },
     intervention_list_treatment = function() {
       return(self$cf_likelihood_treatment$intervention_list)
     },
@@ -305,7 +284,6 @@ Param_middle <- R6Class(
     .type = "middle",
     .cf_likelihood_treatment = NULL,
     .cf_likelihood_control = NULL,
-    .list_all_predicted_lkd = NULL,
     .list_newH = NULL,  # the clever covariates
     .list_newH_raw = NULL,  # the clever covariates, without A indicators
     .list_D = NULL,
