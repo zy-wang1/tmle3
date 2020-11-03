@@ -108,7 +108,7 @@ for (k in 1:2) {
 
   tlik <- Targeted_Likelihood$new(initial_likelihood,
                                   submodel_type_by_node = "EIC" ,
-                                  updater = list(convergence_type = "sample_size", constrain_step = T, delta_epsilon = 0.01))
+                                  updater = list(convergence_type = "sample_size", constrain_step = T, delta_epsilon = 0.01, cvtmle=F))
   param <- middle_spec$make_params(tmle_task, tlik, if_projection = T)[[1]]
 
 

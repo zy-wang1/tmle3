@@ -479,8 +479,13 @@ tmle3_Update <- R6Class(
         cat(sprintf("max(abs(ED)): %e\n", max(ED_criterion)))
       }
 
+      full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
+      temp <- data.frame(current = full_IC %>% colMeans,
+                 threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
+      )
+      if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
 
-      return(all(ED_criterion <= ED_threshold))
+      return(all(ED_criterion <= ED_threshold) | if_conv_by_dim)
     },
     update_best = function(likelihood) {
       current_step <- self$step_number

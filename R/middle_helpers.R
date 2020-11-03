@@ -615,7 +615,7 @@ get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
     A_ind <-
       # obs_data[[tmle_task$npsem[[last(loc_A_needed)]]$variables]] == intervention_levels_treat[tmle_task$npsem[[last(loc_A_needed)]]$variables]
       apply(sapply(loc_A_needed, function(k) {
-        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_treat[tmle_task$npsem[[k]]$variables]
+        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_treat[tmle_task$npsem[[k]]$name]
       }), 1, prod) == 1
     # A_ind <- obs_data[[temp_node_names[last(loc_A_needed)]]]  # using variable names (rather than node names) to inquire obs_data
     # these A probs will be taken as product
@@ -635,7 +635,7 @@ get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
     A_ind <-
       # obs_data[[tmle_task$npsem[[last(loc_A_needed)]]$variables]] == intervention_levels_control[tmle_task$npsem[[last(loc_A_needed)]]$variables]
       apply(sapply(loc_A_needed, function(k) {
-        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$variables]
+        obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$name]
       }), 1, prod) == 1
     part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])) %>% pmap_dbl(prod)
     part_RLY <- lapply(loc_RLY_needed, function(k) {

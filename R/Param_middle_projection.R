@@ -58,51 +58,12 @@ Param_middle_projection <- R6Class(
       Z_nodes <- grep("Z", all_nodes, value = T)
       RLY_nodes <- grep("(R|L|Y).[1-9]$", all_nodes, value = T)
 
-      # node_list <- lapply(observed_likelihood$training_task$npsem, function(x) x$variables)
-      #
-      # list_gamma_npsem_1 <- lapply(1:tau, function(t) {
-      #   gamma_npsem(node_list, type = 1, j = t)
-      # })
-      # list_gamma_npsem_2 <- lapply(1:tau, function(t) {
-      #   gamma_npsem(node_list, type = 2, j = t)
-      # })
-      #
-      # list_gamma_task_1 <- lapply(list_gamma_npsem_1, function(each_npsem) {
-      #   raw_data <- observed_likelihood$training_task$data %>% dplyr::select(-c(id, t)) %>% setDT
-      #   tmle3_Task$new(raw_data, npsem = each_npsem)
-      # })
-      # list_gamma_task_2 <- lapply(list_gamma_npsem_2, function(each_npsem) {
-      #   raw_data <- observed_likelihood$training_task$data %>% dplyr::select(-c(id, t)) %>% setDT
-      #   tmle3_Task$new(raw_data, npsem = each_npsem)
-      # })
-      #
-      # list_gamma_lkd_1 <- lapply(list_gamma_task_1, function(each_task) {
-      #   middle_spec$make_initial_likelihood(
-      #     each_task,
-      #     learner_list
-      #   )
-      # })
-      # list_gamma_lkd_2 <- lapply(list_gamma_task_2, function(each_task) {
-      #   middle_spec$make_initial_likelihood(
-      #     each_task,
-      #     learner_list
-      #   )
-      # })
-      # list_gamma_lkd_1[[1]]$get_likelihood(list_gamma_task_1[[1]], node = "A_1", fold_number = "full")
-      #
-      # list_gamma_lkd_1[[1]]$factor_list
-
       private$.static_likelihood <- static_likelihood
-
-
-
-
       private$.update_nodes <- c(Z_nodes, RLY_nodes)
 
       super$initialize(observed_likelihood, list(), outcome_node = outcome_node)
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
-
       # todo: extend for stochastic
       private$.cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
       private$.cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
@@ -120,12 +81,12 @@ Param_middle_projection <- R6Class(
                                         projection_task_generator = gradient_generator_middle,
                                         target_nodes =  self$update_nodes)
 
-
       if(inherits(observed_likelihood, "Targeted_Likelihood")){
         fold_number <- observed_likelihood$updater$update_fold
       } else {
         fold_number <- "full"
       }
+      private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
 
       setattr(self$observed_likelihood, "target_nodes", self$update_nodes)
       self$observed_likelihood$get_likelihoods(self$observed_likelihood$training_task)
@@ -136,8 +97,6 @@ Param_middle_projection <- R6Class(
         # private$.gradient$expand_task(private$.cf_task_treatment, node)
         # private$.gradient$expand_task(private$.cf_task_control, node)
       }
-
-      private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
 
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
@@ -161,12 +120,11 @@ Param_middle_projection <- R6Class(
             temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           } else {
             # A nodes won't get updated
-            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           }
           data.frame(temp_input, output = temp_output) %>% return
         }
       })
-
 
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", node = NULL) {
@@ -209,25 +167,6 @@ Param_middle_projection <- R6Class(
 
       #TODO need to montecarlo simulate from likleihood to eval parameter.
 
-      # todo: make sure we support updating these params
-      # pA <- self$observed_likelihood$get_likelihoods(tmle_task, intervention_nodes, fold_number)
-      # cf_pA_treatment <- self$cf_likelihood_treatment$get_likelihoods(tmle_task, intervention_nodes, fold_number)
-      # cf_pA_control <- self$cf_likelihood_control$get_likelihoods(tmle_task, intervention_nodes, fold_number)
-      #
-      # # todo: extend for stochastic
-      # cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(tmle_task)[[1]]
-      # cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
-      #
-      # Y <- tmle_task$get_tmle_node(self$outcome_node, impute_censoring = TRUE)
-      #
-      # EY <- self$observed_likelihood$get_likelihood(tmle_task, self$outcome_node, fold_number)
-      # EY1 <- self$observed_likelihood$get_likelihood(cf_task_treatment, self$outcome_node, fold_number)
-      # EY0 <- self$observed_likelihood$get_likelihood(cf_task_control, self$outcome_node, fold_number)
-      #
-      # psi <- mean(EY1 - EY0)
-      #
-      # IC <- EIC + (EY1 - EY0) - psi
-
       temp_node_names <- names(self$observed_likelihood$training_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
@@ -245,11 +184,9 @@ Param_middle_projection <- R6Class(
           temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
           temp_target_node <- intersect(self$update_nodes, temp_node_names[loc_node])
           if (length(temp_target_node) == 1) {
-            # for each short task, only the last node (if it is an update_node) needs to be updated
             temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           } else {
-            # A nodes won't get updated
-            temp_output <- self$static_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
+            temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = temp_node_names[loc_node], fold_number)  # corresponding outputs
           }
           data.frame(temp_input, output = temp_output) %>% return
         }
@@ -269,7 +206,6 @@ Param_middle_projection <- R6Class(
                                            rule_variables = c(intervention_variables,
                                                               last(obs_variable_names)),
                                            rule_values = c(intervention_levels_control, 1))
-
       # for each observed L_0 vector, generate all needed combinations, one version for A = 1, one version for A = 0
       unique_L0 <- obs_data[, tmle_task$npsem[[1]]$variables] %>% unique
       library_L0 <- data.frame(unique_L0, output =

@@ -4,7 +4,7 @@ n_sim <- 8 *2
 nCores <- 8
 
 timepoint <- 1
-if_misspec <- F
+if_misspec <- T
 
 data_truth <- generate_Zheng_data(B = 100000, tau = timepoint, seed = 202008, setAM = c(1, 0), if_LY_misspec = if_misspec)
 truth <- data_truth[[timepoint + 1]]$Y %>% mean
@@ -93,15 +93,39 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
   )
   test
   test$ED
-  sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000)
+  threshold1 <- sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000)
   test$steps
+
+
+  updater <- tmle3_Update_middle$new(maxit = 100, convergence_type = "scaled_var",
+                                     fluctuation_type = "standard", submodel_type = "onestep", d_epsilon = 0.01,
+                                     cvtmle = T
+                                     , if_direction = T
+  )
+  targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)
+  tmle_params <- middle_spec$make_params(tmle_task, targeted_likelihood)
+  updater$tmle_params <- tmle_params
+
+  suppressMessages(
+    tmle_params[[1]]$estimates()$psi
+  )
+  list1 <- tmle_params[[1]]$list_D %>% lapply(mean) %>% compact %>% unlist
+
+  suppressMessages(
+    test2 <- fit_tmle3(tmle_task, targeted_likelihood, tmle_params, updater)
+  )
 
   return(
     list(non = test$initial_psi,
          one = test$estimates[[1]]$psi,
          step = test$steps,
          ed = test$ED,
-         threshold = sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000)
+         threshold = threshold1
+         ,
+         one_cvtmle = test2$estimates[[1]]$psi,
+         step_cvtmle = test2$steps,
+         ed_cvtmle = test2$ED,
+         threshold_cvtmle = sd(tmle_params[[1]]$estimates()$IC) / sqrt(1000) / log(1000)
          # ,
          # last_dir = updater$record_direction %>% last %>% unlist,
          # dir10 = ifelse_vec(length(updater$record_direction) >= 10, updater$record_direction[[10]] %>% unlist, 0)
@@ -112,12 +136,17 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
 data.frame(
   step = do.call(rbind, results)[, 3] %>% unlist,
   ed = do.call(rbind, results)[, 4] %>% unlist,
-  threshold = do.call(rbind, results)[, 5] %>% unlist
+  threshold = do.call(rbind, results)[, 5] %>% unlist,
+  step_cvtmle = do.call(rbind, results)[, 7] %>% unlist,
+  ed_cvtmle = do.call(rbind, results)[, 8] %>% unlist,
+  threshold_cvtmle = do.call(rbind, results)[, 9] %>% unlist
 )
 
 (do.call(rbind, results) %>% as.matrix)[, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth)^2 %>% mean)
 (do.call(rbind, results) %>% as.matrix)[, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth) %>% sd)
 (do.call(rbind, results) %>% as.matrix)[, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth) %>% abs %>% mean)
+
+(do.call(rbind, results) %>% as.matrix)[, c(1, 2, 6)] %>% apply(2, function(x) (as.numeric(x) - truth)^2 %>% mean)
 
 
 (do.call(rbind, results) %>% as.matrix)[(do.call(rbind, results)[, 3] %>% unlist) < 150, -c(3:length(results))] %>% apply(2, function(x) (as.numeric(x) - truth)^2 %>% mean)

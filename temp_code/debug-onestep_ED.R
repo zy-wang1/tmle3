@@ -71,7 +71,7 @@ initial_likelihood <- middle_spec$make_initial_likelihood(
 
 
 updater <- tmle3_Update_middle$new(maxit = 100, convergence_type = "scaled_var",
-                                   fluctuation_type = "standard", submodel_type = "onestep", d_epsilon = 0.01, cvtmle = F
+                                   fluctuation_type = "standard", submodel_type = "onestep", d_epsilon = 0.01, cvtmle = T
                                    , if_direction = T
                                    )
 targeted_likelihood <- Targeted_Likelihood$new(initial_likelihood, updater)

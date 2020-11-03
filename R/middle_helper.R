@@ -63,11 +63,17 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
 gradient_generator_middle <- function(tmle_task, lik,  node, include_outcome = T, ipw_args = NULL, fold_number){
 
   task <- tmle_task$get_regression_task(node)
-  IC <- ipw_middle(tmle_task, lik,  ipw_args, fold_number)[[node]] %>% as.vector
-  cols <- task$add_columns(data.table(IC = IC))
+  if (include_outcome) {
+    IC <- ipw_middle(tmle_task, lik,  ipw_args, fold_number)[[node]] %>% as.vector
+    cols <- task$add_columns(data.table(IC = IC))
+  } else {
+    cols <- task$add_columns(NULL)
+  }
   task <- task$clone()
   nodes <- task$nodes
-  nodes$outcome <- "IC"
+  if (include_outcome) {
+    nodes$outcome <- "IC"
+  }
   nodes$covariates <- c(nodes$covariates, tmle_task$npsem[[node]]$variables)
 
   task$initialize(
