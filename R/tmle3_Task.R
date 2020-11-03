@@ -29,7 +29,7 @@ tmle3_Task <- R6Class(
   class = TRUE,
   inherit = sl3_Task,
   public = list(
-    initialize = function(data, npsem, summary_measure_columns = NULL, id = NULL, time = NULL, force_at_risk = F, long_format = NULL, folds_for_ids = NULL, ...) {
+    initialize = function(data, npsem, summary_measure_columns = NULL, id = NULL, time = NULL, force_at_risk = F, long_format = F, folds_for_ids = NULL, ...) {
 
 
       dot_args <- list(...)
@@ -48,11 +48,12 @@ tmle3_Task <- R6Class(
         if(!is.null(long_format)){
           long_format <- long_format
         }
-        else if(!is.null(time) | "t" %in% colnames(data)) {
-          long_format <- T
-        } else {
-          long_format <- F
-        }
+        # else if(!is.null(time) | "t" %in% colnames(data)) {
+        #   long_format <- T
+        # }
+        # else {
+        #   long_format <- F
+        # }
 
 
         if(!is.data.table(data)) data <- as.data.table(data)
@@ -99,11 +100,11 @@ tmle3_Task <- R6Class(
         shared_data <- data
         id <- "id"
         time <- "t"
-        if(length(unique(shared_data$raw_data$t)) > 1){
-          long_format <- T
-        } else {
-          long_format <- F
-        }
+        # if(length(unique(shared_data$raw_data$t)) > 1){
+        #   long_format <- T
+        # } else {
+        #   long_format <- F
+        # }
         if(!all(key(shared_data$raw_data) == c("id", "t"))){
           setkey(shared_data$raw_data, "id", "t")
           stop("Shared_Data object passed does not have a (id, t) key set.")

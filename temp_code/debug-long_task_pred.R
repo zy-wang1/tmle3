@@ -130,6 +130,7 @@ loc_node <- length(temp_node_names)
 node <- temp_node_names[loc_node]
 current_variable <- tmle_task$npsem[[loc_node]]$variables
 temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
+temp_input$id <- 1:nrow(temp_input)
 temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
 likelihood_factor <- tlik$factor_list[[node]]
 fold_number <- "full"
@@ -145,11 +146,40 @@ clean_library <- data.frame(
 long_task <- gradient$expand_task(tmle_task, node = "Y_1")
 to_verify_library <- data.frame(
   long_task$data %>% select(-c(id, t, trueid)),
-  value = likelihood_factor$get_likelihood(long_task, fold_number, expand = expand, node = node)
+  value = tlik$get_likelihood(long_task, fold_number, expand = expand, node = node)
 )
 # on cluster the two lines below agree; on R3.6.3 and R3.6.1 on my laptop they do not
 left_join(long_task$data %>% select(-c(id, t, trueid)) %>% as.data.frame(), clean_library %>% as.data.frame())$value
 to_verify_library$value
+
+data.frame(value = tlik$get_likelihood(gradient$expand_task(tmle_task, "Y_1"), "Y_1"),
+           long_task$get_regression_task("Y_1")$data
+           ) %>% head
+data.frame(
+  value = left_join(long_task$data %>% select(-c(id, t, trueid)) %>% as.data.frame(), clean_library %>% as.data.frame())$value,
+  long_task$data
+) %>% head
+
+data.frame(
+  value = left_join(long_task$get_regression_task("Y_1")$data %>% select(-c(id, t, trueid)) %>% as.data.frame(), clean_library %>% as.data.frame())$value,
+  long_task$get_regression_task("Y_1")$data
+) %>% head
+
+clean_library <- data.frame(
+  temp_task$data %>% select(-c(id, t)),
+  value = likelihood_factor$get_likelihood(temp_task, fold_number, node = node)
+)
+
+
+
+long_task$get_regression_task("Y_1")$data %>% head(10)
+tmle_task$get_regression_task("Y_1")$data %>% head(10)
+
+long_task$long_format
+
+
+temp_task$get_regression_task("Y_1")$data %>% head
+
 
 # there is no issue with non-expended tasks, such as the observed tmle_task
 to_verify_library <- data.frame(
