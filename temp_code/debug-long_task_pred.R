@@ -71,6 +71,50 @@
                                                  cvtmle=F
                                   ))
   tmle_params <- middle_spec$make_params(tmle_task, tlik, if_projection = T, initial_likelihood)
+
+  self <- tmle_params[[1]]
+  observed_likelihood <- tlik
+
+  temp_node_names <- names(observed_likelihood$training_task$npsem)
+  loc_A <- grep("A", temp_node_names)
+  loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+  loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+  if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
+  tau <- last(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2]))
+
+  all_nodes <- names(observed_likelihood$training_task$npsem)
+  A_nodes <- grep("A", all_nodes, value = T)
+  Z_nodes <- grep("Z", all_nodes, value = T)
+  RLY_nodes <- grep("(R|L|Y).[1-9]$", all_nodes, value = T)
+
+  static_likelihood <- initial_likelihood
+
+  update_nodes <- c(Z_nodes, RLY_nodes)
+  intervention_list_treatment <- self$intervention_list_treatment
+  intervention_list_control <- self$intervention_list_control
+
+  cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
+  cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
+  cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+  cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+
+  gradient <- Gradient$new(observed_likelihood,
+                           ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
+                                           cf_likelihood_control = self$cf_likelihood_control,
+                                           intervention_list_treatment = self$intervention_list_treatment,
+                                           intervention_list_control = self$intervention_list_control,
+                                           cf_task_treatment = self$cf_task_treatment,
+                                           cf_task_control = self$cf_task_control,
+                                           static_likelihood = self$static_likelihood
+                           ),
+                           projection_task_generator = gradient_generator_middle,
+                           target_nodes =  self$update_nodes)
+
+  if(inherits(observed_likelihood, "Targeted_Likelihood")){
+    fold_number <- observed_likelihood$updater$update_fold
+  } else {
+    fold_number <- "full"
+  }
 }
 
 
@@ -79,16 +123,23 @@
 
 # create a clean library of inputs and outputs of pY
 self <- tmle_params[[1]]
+temp_node_names <- tmle_task$npsem %>% names
+obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
+obs_variable_names <- colnames(obs_data)
 loc_node <- length(temp_node_names)
 node <- temp_node_names[loc_node]
 current_variable <- tmle_task$npsem[[loc_node]]$variables
 temp_input <- expand_values(variables = obs_variable_names[1:which(obs_variable_names == current_variable)])  # all possible inputs
 temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:loc_node])
 likelihood_factor <- tlik$factor_list[[node]]
+fold_number <- "full"
+expand <- T
 clean_library <- data.frame(
   temp_task$data %>% select(-c(id, t)),
-  value = likelihood_factor$get_likelihood(temp_task, fold_number, expand = expand, node = node)
+  value = likelihood_factor$get_likelihood(temp_task, fold_number, node = node)
 )
+
+
 
 # create a library with long_task as inputs, and the outputs from get_likelihood
 long_task <- gradient$expand_task(tmle_task, node = "Y_1")
