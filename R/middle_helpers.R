@@ -491,7 +491,8 @@ get_obs_Q <- function(tmle_task, obs_data, list_H,
 #' @export
 get_obs_H <- function(tmle_task, obs_data, current_likelihood,
                       cf_task_treatment, cf_task_control,
-                      intervention_variables, intervention_levels_treat, intervention_levels_control
+                      intervention_variables, intervention_levels_treat, intervention_levels_control,
+                      fold_number = "full"
 ) {
   obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)
@@ -507,10 +508,10 @@ get_obs_H <- function(tmle_task, obs_data, current_likelihood,
     A_ind <- apply(sapply(loc_A_needed, function(k) {
       obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_treat[tmle_task$npsem[[k]]$name]
     }), 1, prod) == 1
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])) %>% pmap_dbl(prod)  # this is the likelihood of being 1
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)) %>% pmap_dbl(prod)  # this is the likelihood of being 1
     part_Z <- lapply(loc_Z_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     if(length(part_Z) == 0) part_Z <- 1
     list_H[[temp_ind]] <- ifelse(A_ind, 1/part_A*part_Z, 0) %>% as.vector
@@ -521,10 +522,10 @@ get_obs_H <- function(tmle_task, obs_data, current_likelihood,
     A_ind <- apply(sapply(loc_A_needed, function(k) {
       obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$name]
     }), 1, prod) == 1
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])) %>% pmap_dbl(prod)
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number)) %>% pmap_dbl(prod)
     part_RLY <- lapply(loc_RLY_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     if(length(part_RLY) == 0) part_RLY <- 1
     list_H[[temp_ind]] <- ifelse(A_ind, 1/part_A*part_RLY, 0) %>% as.vector
@@ -537,7 +538,8 @@ get_obs_H <- function(tmle_task, obs_data, current_likelihood,
 #' @export
 get_obs_H_raw <- function(tmle_task, obs_data, current_likelihood,
                       cf_task_treatment, cf_task_control,
-                      intervention_variables, intervention_levels_treat, intervention_levels_control
+                      intervention_variables, intervention_levels_treat, intervention_levels_control,
+                      fold_number = "full"
 ) {
   obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)
@@ -560,10 +562,10 @@ get_obs_H_raw <- function(tmle_task, obs_data, current_likelihood,
       }), 1, prod) == 1
     # A_ind <- obs_data[[temp_node_names[last(loc_A_needed)]]]  # using variable names (rather than node names) to inquire obs_data
     # these A probs will be taken as product
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])) %>% pmap_dbl(prod)  # this is the likelihood of being 1
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number) ) %>% pmap_dbl(prod)  # this is the likelihood of being 1
     part_Z <- lapply(loc_Z_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     if(length(part_Z) == 0) part_Z <- 1
 
@@ -578,10 +580,10 @@ get_obs_H_raw <- function(tmle_task, obs_data, current_likelihood,
       apply(sapply(loc_A_needed, function(k) {
         obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$variables]
       }), 1, prod) == 1
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])) %>% pmap_dbl(prod)
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) ) %>% pmap_dbl(prod)
     part_RLY <- lapply(loc_RLY_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     list_H[[temp_ind]] <- (1/part_A*part_RLY) %>% as.vector
   }
@@ -596,7 +598,8 @@ get_obs_H_raw <- function(tmle_task, obs_data, current_likelihood,
 #' @export
 get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
                            cf_task_treatment, cf_task_control,
-                           intervention_variables, intervention_levels_treat, intervention_levels_control
+                           intervention_variables, intervention_levels_treat, intervention_levels_control,
+                           fold_number = "full"
 ) {
   obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)
@@ -619,10 +622,10 @@ get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
       }), 1, prod) == 1
     # A_ind <- obs_data[[temp_node_names[last(loc_A_needed)]]]  # using variable names (rather than node names) to inquire obs_data
     # these A probs will be taken as product
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])) %>% pmap_dbl(prod)  # this is the likelihood of being 1
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number) ) %>% pmap_dbl(prod)  # this is the likelihood of being 1
     part_Z <- lapply(loc_Z_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     if(length(part_Z) == 0) part_Z <- 1
 
@@ -637,10 +640,10 @@ get_obs_H_full <- function(tmle_task, obs_data, current_likelihood,
       apply(sapply(loc_A_needed, function(k) {
         obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[tmle_task$npsem[[k]]$name]
       }), 1, prod) == 1
-    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])) %>% pmap_dbl(prod)
+    part_A <- lapply(loc_A_needed, function(k) current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) ) %>% pmap_dbl(prod)
     part_RLY <- lapply(loc_RLY_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k]) /
-        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k])
+      current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number) /
+        current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number)
     }) %>% pmap_dbl(prod)
     list_H[[temp_ind]] <- ifelse(A_ind, 1/part_A*part_RLY, 0) %>% as.vector
   }

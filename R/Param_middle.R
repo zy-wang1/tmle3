@@ -53,8 +53,13 @@ Param_middle <- R6Class(
       # observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F) {
-      if (!is.null(private$.list_newH$fold_number) & update == F) {
-        return(private$.list_newH$fold_number)
+      if (fold_number == "full") {  # tmle
+        list_newH <- private$.list_newH
+      } else if (fold_number == "validation") {  # cvtmle
+        list_newH <- private$.list_newH_val
+      }
+      if (!is.null(list_newH) & update == F) {
+        return(list_newH)
       } else {
         if (is.null(tmle_task)) {
           tmle_task <- self$observed_likelihood$training_task
@@ -75,12 +80,10 @@ Param_middle <- R6Class(
         # ZW todo: to handle long format and wide format
 
         if (fold_number == "full") {
-          list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
-          temp <- self$observed_likelihood$list_all_predicted_lkd_val
-          rm(temp)
+          list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd # if it's null, it will be recalculated in observed_likelihood
         } else if (fold_number == "validation") {
           list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd_val
-          temp <- self$observed_likelihood$list_all_predicted_lkd
+          temp <- self$observed_likelihood$list_all_predicted_lkd  # calculate full version if not already
           rm(temp)
         }
 
@@ -93,10 +96,11 @@ Param_middle <- R6Class(
 
         list_H <- get_obs_H(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
                             cf_task_treatment, cf_task_control,
-                            intervention_variables, intervention_levels_treat, intervention_levels_control)
+                            intervention_variables, intervention_levels_treat, intervention_levels_control,
+                            fold_number)
         list_Q_1 <- get_obs_Q(tmle_task, obs_data, list_H,
                               intervention_variables, intervention_levels_treat, intervention_levels_control,
-                              list_all_predicted_lkd,
+                              list_all_predicted_lkd,  # val version decided above for fold_number == "validation"
                               lt = 1)
         list_Q_0 <- get_obs_Q(tmle_task, obs_data, list_H,
                               intervention_variables, intervention_levels_treat, intervention_levels_control,
@@ -111,7 +115,12 @@ Param_middle <- R6Class(
         }
         names(list_newH) <- temp_node_names
 
-        private$.list_newH$fold_number <- list_newH
+        if (fold_number == "full") {
+          private$.list_newH <- list_newH
+        } else if (fold_number == "validation") {
+          private$.list_newH_val <- list_newH
+        }
+
         return(list_newH)
       }
 
@@ -139,15 +148,19 @@ Param_middle <- R6Class(
 
       if (fold_number == "full") {
         list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd
+        list_D <- private$.list_D
+        result <- private$.result
       } else if (fold_number == "validation") {
         list_all_predicted_lkd <- self$observed_likelihood$list_all_predicted_lkd_val
         temp <- self$observed_likelihood$list_all_predicted_lkd
         rm(temp)
+        list_D <- private$.list_D_val
+        result <- private$.result_val
       }
 
       # make sure we force update this after each updating step; this helps speed up updater$check_convergence
-      if (!is.null(private$.list_D) & !is.null(private$.result) & update == F) {
-        return(private$.result)
+      if (!is.null(list_D) & !is.null(result) & update == F) {
+        return(result)
       } else {
         intervention_variables <- map_chr(tmle_task$npsem[intervention_nodes], ~.x$variables)
         intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
@@ -190,7 +203,6 @@ Param_middle <- R6Class(
         psi <- mean(vec_est)
 
         list_newH <- self$clever_covariates(tmle_task, fold_number)
-        # list_newH_raw <- self$list_newH_raw$fold_number
 
         list_D <- list_D_null <- list_D_fit <- list()
         for (loc_node in 1:length(list_newH)) {
@@ -198,24 +210,17 @@ Param_middle <- R6Class(
             # ZW todo: for discretized variables
             current_ind <- (obs_data[[tmle_task$npsem[[loc_node]]$variables]] == 1)*1
             # temp_p <- self$observed_likelihood$get_likelihoods(tmle_task, temp_node_names[loc_node])
-            if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node]) else
-              temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node])
+            if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node], fold_number) else
+              temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node], fold_number)
             temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)
             list_D[[loc_node]] <- (current_ind - temp_p) *list_newH[[loc_node]]
-            list_D_fit[[loc_node]] <- (1 - temp_p) *list_newH[[loc_node]]
-            # e.g. L nodes, ind_A all 1's for treat cf task
-            if (loc_node %in% loc_Z) {
-              list_D_null[[loc_node]] <- rep(0, tmle_task$nrow)
-            } else {
-              list_D_null[[loc_node]] <- rep(0, tmle_task$nrow)
-            }
+            list_D_fit[[loc_node]] <- (1 - temp_p) *list_newH[[loc_node]]  # e.g. L nodes, ind_A all 1's for treat cf task
+            list_D_null[[loc_node]] <- rep(0, tmle_task$nrow)
           }
         }
         list_D[[1]] <-
         # list_D_trt[[1]] <- list_D_ctrl[[1]] <-
         vec_est - psi
-        # # for debug the last node
-        # list_D[[length(list_D)]] <- length(list_D) <- length(list_D) <- rep(0, vec_est)
 
         names(list_D) <- names(list_D_null) <- names(list_D_fit) <- names(list_newH)
 
@@ -227,10 +232,18 @@ Param_middle <- R6Class(
                        )
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
-        private$.list_D <- list_D
-        private$.list_D_null <- list_D_null
-        private$.list_D_fit <- list_D_fit
-        private$.result <- result
+        if (fold_number == "full") {
+          private$.list_D <- list_D
+          private$.list_D_null <- list_D_null
+          private$.list_D_fit <- list_D_fit
+          private$.result <- result
+        } else if (fold_number == "validation") {
+          private$.list_D_val <- list_D
+          private$.list_D_null_val <- list_D_null
+          private$.list_D_fit_val <- list_D_fit
+          private$.result_val <- result
+        }
+
 
         return(result)
       }
@@ -262,6 +275,15 @@ Param_middle <- R6Class(
     list_D_fit = function() {
       return(private$.list_D_fit)
     },
+    list_D_val = function() {
+      return(private$.list_D_val)
+    },
+    list_D_null_val = function() {
+      return(private$.list_D_null_val)
+    },
+    list_D_fit_val = function() {
+      return(private$.list_D_fit_val)
+    },
     update_nodes = function() {
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
@@ -276,8 +298,8 @@ Param_middle <- R6Class(
     list_newH = function() {
       return(private$.list_newH)
     },
-    list_newH_raw = function() {
-      return(private$.list_newH_raw)
+    list_newH_val = function() {
+      return(private$.list_newH_val)
     }
   ),
   private = list(
@@ -285,11 +307,15 @@ Param_middle <- R6Class(
     .cf_likelihood_treatment = NULL,
     .cf_likelihood_control = NULL,
     .list_newH = NULL,  # the clever covariates
-    .list_newH_raw = NULL,  # the clever covariates, without A indicators
+    .list_newH_val = NULL,
     .list_D = NULL,
     .list_D_null = NULL,
     .list_D_fit = NULL,
-    .result = NULL
+    .list_D_val = NULL,
+    .list_D_null_val = NULL,
+    .list_D_fit_val = NULL,
+    .result = NULL,
+    .result_val = NULL
   )
 )
 

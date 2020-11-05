@@ -41,7 +41,8 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
 
   list_H <- get_obs_H_full(task, obs_data, current_likelihood = static_likelihood,
                            cf_task_treatment, cf_task_control,
-                           intervention_variables, intervention_levels_treat, intervention_levels_control)
+                           intervention_variables, intervention_levels_treat, intervention_levels_control,
+                           fold_number = fold_number)
 
 
   list_newH <- list()

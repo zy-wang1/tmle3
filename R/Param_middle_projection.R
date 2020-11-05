@@ -89,7 +89,7 @@ Param_middle_projection <- R6Class(
       private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
 
       setattr(self$observed_likelihood, "target_nodes", self$update_nodes)
-      self$observed_likelihood$get_likelihoods(self$observed_likelihood$training_task)
+      self$observed_likelihood$get_likelihoods(self$observed_likelihood$training_task, fold_number = fold_number)
       for (node in self$update_nodes) {
         temp_long_task <- private$.gradient$expand_task(observed_likelihood$training_task, node)
         self$observed_likelihood$get_likelihood(temp_long_task, node, fold_number)
