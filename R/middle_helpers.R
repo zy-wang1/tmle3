@@ -234,7 +234,7 @@ get_current_newH <- function(loc_node,
                              list_all_predicted_lkd
 ) {
   obs_variable_names <- colnames(obs_data)
-  temp_node_names <- names(tmle_task$npsem)
+  temp_node_names <- names(tmle_task$npsem)  # this has to be the obs task, but only the node names are needed
   loc_A <- grep("A", temp_node_names)
   loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
   loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
@@ -386,7 +386,7 @@ get_current_newH <- function(loc_node,
 
         H_current <- ifelse(
           # data_temp[last(intervention_variables_loc_needed)] == 1
-          apply(data_temp[intervention_variables_loc_needed] == 1, 1, prod) == 1
+          apply(data_temp[intervention_variables_loc_needed] == 1, 1, prod) == 1  # this is the A_ind decided by the library tasks
           , 1/part_A*part_Z, 0) %>% as.vector
       }
       # Z nodes

@@ -109,6 +109,23 @@ tmle3_Update <- R6Class(
         private$.epsilons[[current_step]][[update_node]] <- new_epsilon
       }
 
+      lapply(self$tmle_params, function(tmle_param) {
+        if (inherits(tmle_param, "Param_med")) {
+          tmle_param$clever_covariates(fold_number = fold_number, update = T)
+          tmle_param$estimates(fold_number = fold_number, update = T)
+        }
+      })
+
+      if (fold_number != "full") {
+        lapply(self$tmle_params, function(tmle_param) {
+          if (inherits(tmle_param, "Param_med")) {
+            tmle_param$clever_covariates(fold_number = "full", update = T)
+            tmle_param$estimates(fold_number = "full", update = T)
+          }
+        })
+      }
+
+
       # update step number
       private$.step_number <- current_step
     },
@@ -248,6 +265,15 @@ tmle3_Update <- R6Class(
       submodel_data["update_node"] <- NULL
       weights <- submodel_data$weights
       # TODO
+
+      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
+        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
+          if (self$tmle_params[[1]]$observed_likelihood$submodel_type(update_node) == "logistic") {  # transform to conditional mean before fitting
+            observed <- submodel_data$observed
+            submodel_data$initial <- ifelse(observed == 1, submodel_data$initial, 1-submodel_data$initial)
+          }
+        }
+      }
 
       if(self$one_dimensional){
         # Will break if not called by original training task
@@ -422,7 +448,25 @@ tmle3_Update <- R6Class(
         drop_censored = FALSE
       )
 
+      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
+        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
+          if (likelihood$submodel_type(update_node) == "logistic") {  # transform to conditional mean
+            observed <- tmle_task$get_tmle_node(update_node)
+            submodel_data$initial <- ifelse(observed==1, submodel_data$initial, 1-submodel_data$initial)
+          }
+        }
+      }
+
       updated_likelihood <- self$apply_submodel(submodel_data, new_epsilon)
+
+      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
+        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
+          if (likelihood$submodel_type(update_node) == "logistic") {  # transform back to density
+            observed <- tmle_task$get_tmle_node(update_node)
+            updated_likelihood <- ifelse(observed==1, updated_likelihood, 1-updated_likelihood)
+          }
+        }
+      }
 
       if (any(!is.finite(updated_likelihood))) {
         stop("Likelihood was updated to contain non-finite values.\n
@@ -479,13 +523,15 @@ tmle3_Update <- R6Class(
         cat(sprintf("max(abs(ED)): %e\n", max(ED_criterion)))
       }
 
-      full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
-      temp <- data.frame(current = full_IC %>% colMeans,
-                 threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
-      )
-      if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
+      # full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
+      # temp <- data.frame(current = full_IC %>% colMeans,
+      #            threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
+      # )
+      # if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
 
-      return(all(ED_criterion <= ED_threshold) | if_conv_by_dim)
+      return(all(ED_criterion <= ED_threshold)
+             # | if_conv_by_dim
+             )
     },
     update_best = function(likelihood) {
       current_step <- self$step_number

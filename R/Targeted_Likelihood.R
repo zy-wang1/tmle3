@@ -69,7 +69,12 @@ Targeted_Likelihood <- R6Class(
         # task_updates <- lapply(tasks_at_step, self$updater$apply_update, self, fold_number, new_epsilon, update_node)
         # ZW: there is no point to update a partial task, if update_node is not in this partial task
         task_updates <- tasks_at_step %>% lapply(function(x) if (update_node %in% names(x$npsem)) {
-          self$updater$apply_update(x, self, fold_number, new_epsilon, update_node)
+          target_nodes <- attr(x, "target_nodes")  # if a task specified which node to update, only update these nodes
+          if (!is.null(target_nodes)) {
+            if (update_node %in% target_nodes) self$updater$apply_update(x, self, fold_number, new_epsilon, update_node)
+          } else {
+            self$updater$apply_update(x, self, fold_number, new_epsilon, update_node)
+          }
         })
 
 
