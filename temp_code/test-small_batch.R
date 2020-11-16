@@ -16,7 +16,7 @@ source("./temp_code/generate_data.R")
 
 library(parallel)
 
-n_sim <- 8 *2
+n_sim <- 8 * 2
 nCores <- 8
 
 timepoint <- 1
@@ -64,22 +64,23 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
     control_level = 0
   )
 
-  tmle_task <- med_spec$make_tmle_task(data_wide, node_list)
+  tmle_task1 <- med_spec$make_tmle_task(data_wide, node_list)
 
   # choose base learners
   lrnr_glm_fast <- Lrnr_glm_fast$new(outcome_type = "binomial")
-  learner_list <- lapply(1:length(tmle_task$npsem), function(s) Lrnr_sl$new(
+  learner_list <- lapply(1:length(tmle_task1$npsem), function(s) Lrnr_sl$new(
     learners = list(
       lrnr_glm_fast
     )
   ))
-  names(learner_list) <- names(tmle_task$npsem)  # the first will be ignored; empirical dist. will be used for covariates
+  names(learner_list) <- names(tmle_task1$npsem)  # the first will be ignored; empirical dist. will be used for covariates
 
   initial_likelihood <- med_spec$make_initial_likelihood(
-    tmle_task,
+    tmle_task1,
     learner_list
   )
 
+  # # analytic EIC
   # updater <- tmle3_Update$new(convergence_type = "scaled_var",
   #                             constrain_step = T,
   #                             optim_delta_epsilon = T,
@@ -90,35 +91,77 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
   #                                      ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
   #                               )
   #                             },
-  #                             maxit=10
+  #                             maxit=20
   #                             ,
   #                             cvtmle=F)
   # tlik <- Targeted_Likelihood$new(initial_likelihood,
   #                                 submodel_type_by_node = "EIC" ,
   #                                 updater = updater)
 
+  # # logistic
+  # updater <- tmle3_Update$new(convergence_type = "scaled_var",
+  #                             # constrain_step = T,
+  #                             # optim_delta_epsilon = T,
+  #                             # one_dimensional=F,
+  #                             # delta_epsilon=function(x) {
+  #                             #   ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/tmle_task$nrow)/log(tmle_task$nrow),
+  #                             #          0.00000001,
+  #                             #          ifelse(mean(x %>% as.vector) > 0, 1, -1)
+  #                             #   )
+  #                             # },
+  #                             maxit=4
+  #                             ,
+  #                             cvtmle=F)
+  # tlik <- Targeted_Likelihood$new(initial_likelihood,
+  #                                 submodel_type_by_node = "logistic" ,
+  #                                 updater = updater)
+
+  # projected-EIC, resampling
   updater <- tmle3_Update$new(convergence_type = "scaled_var",
-                              # constrain_step = T,
-                              # optim_delta_epsilon = T,
-                              # one_dimensional=F,
-                              # delta_epsilon=function(x) {
-                              #   ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/tmle_task$nrow)/log(tmle_task$nrow),
-                              #          0.00000001,
-                              #          ifelse(mean(x %>% as.vector) > 0, 1, -1)
-                              #   )
-                              # },
-                              maxit=3
+                              constrain_step = T,
+                              optim_delta_epsilon = T,
+                              one_dimensional=F,
+                              delta_epsilon=function(x) {
+                                ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/tmle_task1$nrow)/log(tmle_task1$nrow),
+                                       0.00000001,
+                                       ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
+                                )
+                              },
+                              maxit=100
                               ,
-                              cvtmle=T)
+                              cvtmle=F)
   tlik <- Targeted_Likelihood$new(initial_likelihood,
-                                  submodel_type_by_node = "logistic" ,
+                                  submodel_type_by_node = "EIC" ,
                                   updater = updater)
 
-  tmle_params <- med_spec$make_params(tmle_task, tlik, options = list("tc"))
+
+  tmle_params_no <- med_spec$make_params(tmle_task1, tlik, options = list("tc"), static_likelihood = initial_likelihood,
+                                         if_projection = T
+                                         # , n_resampling = 0
+  )
+
+  # projection param
+  tmle_params <- med_spec$make_params(tmle_task1, tlik, options = list("tc"), static_likelihood = initial_likelihood,
+                                      if_projection = T
+                                      , n_resampling = 50000
+                                      )  # new est
+
+  # tmle_params_raw <- med_spec$make_params(tmle_task1, initial_likelihood, options = list("tc")
+  #                                     # ,
+  #                                     # if_projection = T,
+  #                                     # if_resampling = T
+  #                                     )
+
+  # tmle_params <- med_spec$make_params(tmle_task, tlik, options = list("tc")
+  #                                     # ,
+  #                                     # if_projection = T,
+  #                                     # if_resampling = T
+  #                                     )
+
   updater$tmle_params <- tmle_params
 
   suppressMessages(
-    nontargeting <- tmle_params[[1]]$estimates(tmle_task)
+    nontargeting <- tmle_params_no[[1]]$estimates(tmle_task1)
   )
   temp_IC <- nontargeting$IC
   var_D <- var(temp_IC)
@@ -127,28 +170,49 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
   CI2 <- nontargeting$psi + 1.96 * se
   CI1 <- nontargeting$psi - 1.96 * se
 
-  tmle_params[[1]]$estimates()$psi
-
-  capture.output(
-    updater$update(tlik, tmle_task)
+  suppressMessages(
+    new <- tmle_params[[1]]$estimates(tmle_task1)
   )
-  updater$step_number
-  tmle_params[[1]]$estimates()$IC %>% mean
-  sd(tmle_params[[1]]$estimates()$IC)/sqrt(tmle_task$nrow)/log(tmle_task$nrow)
-  tmle_params[[1]]$clever_covariates(submodel_type = "EIC") %>% lapply(function(x) {
-    abs(mean(x)) < (sd(x)/sqrt(tmle_task$nrow)/log(tmle_task$nrow))
-  })
-
-  new_est <- tlik$updater$tmle_params[[1]]$estimates()
-  new_psi <- new_est$psi
-  nontargeting$psi
-  new_psi
-  temp_IC <- new_est$IC
+  temp_IC <- new$IC
   var_D <- var(temp_IC)
   n <- length(temp_IC)
   se <- sqrt(var_D / n)
-  CI2_new <- new_est$psi + 1.96 * se
-  CI1_new <- new_est$psi - 1.96 * se
+  CI2_new <- new$psi + 1.96 * se
+  CI1_new <- new$psi - 1.96 * se
+  new_psi <- new$psi
+
+  # new_fit <- fit_tmle3(tmle_task, tlik, tmle_params, updater)
+  # new_fit
+  # tlik$cache$tasks %>% lapply(function(x) x$data %>% dim)
+  # new_psi <- new_fit$summary$tmle_est
+  # CI1_new <- new_fit$summary$lower
+  # CI2_new <- new_fit$summary$upper
+  # updater$step_number
+
+  # updater$update_step(likelihood = tlik, tmle_task, fold_number = "full")
+  # tmle_params[[1]]$clever_covariates()$IC %>% rowSums %>% mean
+  # sd(tmle_params[[1]]$clever_covariates()$IC %>% rowSums) / sqrt(tmle_task$nrow) / log(tmle_task$nrow)
+  # var(tmle_params[[1]]$clever_covariates()$IC %>% rowSums)
+  # var_D
+  # tmle_params[[1]]$estimates()$psi
+  # nontargeting$psi
+  # tmle_params[[1]]$estimates()$IC %>% hist
+  # tmle_params_no[[1]]$estimates()$IC %>% hist
+
+
+  # capture.output(
+  #   updater$update(tlik, tmle_task)
+  # )
+  # new_est <- updater$tmle_params[[1]]$estimates()
+  # new_psi <- new_est$psi
+  # nontargeting$psi
+  # new_psi
+  # temp_IC <- new_est$IC
+  # var_D <- var(temp_IC)
+  # n <- length(temp_IC)
+  # se <- sqrt(var_D / n)
+  # CI2_new <- new_est$psi + 1.96 * se
+  # CI1_new <- new_est$psi - 1.96 * se
 
   return(
     list(non = nontargeting$psi,
@@ -178,10 +242,12 @@ results <- mclapply(X = 1:n_sim, mc.cores = nCores, FUN = function(i) {
 report <- sapply(1:2, function(i) {
   c(mean(( unlist((do.call(rbind, results) %>% as.matrix)[, i * 3 - 2]) - truth)^2),
   mean(( unlist((do.call(rbind, results) %>% as.matrix)[, i * 3 - 2]) - truth)),
+  sd( unlist((do.call(rbind, results) %>% as.matrix)[, i * 3 - 2])),
   mean(( unlist((do.call(rbind, results) %>% as.matrix)[, i * 3 - 1]) <= truth & unlist((do.call(rbind, results) %>% as.matrix)[, i * 3]) >= truth)),
   mean(( unlist((do.call(rbind, results) %>% as.matrix)[, i * 3]) - unlist((do.call(rbind, results) %>% as.matrix)[, i * 3 - 1]) ))
   )
 })
-rownames(report) <- c("MSE", "bias", "coverage", "width")
+rownames(report) <- c("MSE", "bias", "sd", "coverage", "width")
 report
 (do.call(rbind, results) %>% as.matrix)[, 7] %>% unlist
+

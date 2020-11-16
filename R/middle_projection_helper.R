@@ -6,12 +6,16 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   cf_likelihood_treatment = ipw_args$cf_likelihood_treatment
   intervention_list_treatment <- ipw_args$intervention_list_treatment
   intervention_list_control <- ipw_args$intervention_list_control
-  cf_task_treatment <- ipw_args$cf_task_treatment
-  cf_task_control <- ipw_args$cf_task_control
+  # cf_task_treatment <- ipw_args$cf_task_treatment
+  # cf_task_control <- ipw_args$cf_task_control
   static_likelihood <- ipw_args$static_likelihood
   # # todo: extend for stochastic
   # cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(task)[[1]]
   # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
+
+  cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(task)[[1]]
+  cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(task)[[1]]
+
 
   intervention_nodes <-
     # intersect(
@@ -39,10 +43,14 @@ ipw_middle <- function(task, lik, ipw_args, fold_number){
   intervention_levels_treat <- map_dbl(intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
   intervention_levels_control <- map_dbl(intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
 
-  list_H <- get_obs_H_full(task, obs_data, current_likelihood = static_likelihood,
+  list_H <- get_obs_H_full(task, obs_data,
+                           current_likelihood = static_likelihood,
+                           # current_likelihood = lik,
                            cf_task_treatment, cf_task_control,
                            intervention_variables, intervention_levels_treat, intervention_levels_control,
-                           fold_number = fold_number)
+                           fold_number = fold_number
+                           # , bound = 0.05
+                           )
 
 
   list_newH <- list()

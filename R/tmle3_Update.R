@@ -87,6 +87,16 @@ tmle3_Update <- R6Class(
       names(na_epsilons) <- update_nodes
       private$.epsilons[[current_step]] <- na_epsilons
 
+      # temp_node_names <- names(tmle_task$npsem)
+      # loc_A <- grep("A", temp_node_names)
+      # loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
+      # loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("Z", "A")) & strsplit(s, "_")[[1]][2] != 0))
+      # cf_likelihood_treatment <- self$tmle_params[[1]]$cf_likelihood_treatment
+      # cf_likelihood_control <- self$tmle_params[[1]]$cf_likelihood_control
+      # cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(tmle_task)[[1]]
+      # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
+
+
       for (update_node in update_nodes) {
         # get new submodel fit
         submodel_data <- self$generate_submodel_data(
@@ -95,6 +105,20 @@ tmle3_Update <- R6Class(
           drop_censored = TRUE,
           for_fitting = T
         )
+
+        # if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
+        #   if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
+        #     # updates should be fitted at corresponding cf densities
+        #     if (update_node %in% temp_node_names[loc_Z]) {
+        #       # z node find updates in control tasks
+        #       submodel_data$initial <- likelihood$get_likelihood(cf_task_control, update_node)
+        #     } else {
+        #       submodel_data$initial <- likelihood$get_likelihood(cf_task_treatment, update_node)
+        #     }
+        #   }
+        # }
+        #
+
 
         new_epsilon <- self$fit_submodel(submodel_data)
 
@@ -111,6 +135,7 @@ tmle3_Update <- R6Class(
 
       lapply(self$tmle_params, function(tmle_param) {
         if (inherits(tmle_param, "Param_med")) {
+          tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
           tmle_param$clever_covariates(fold_number = fold_number, update = T)
           tmle_param$estimates(fold_number = fold_number, update = T)
         }
@@ -119,6 +144,7 @@ tmle3_Update <- R6Class(
       if (fold_number != "full") {
         lapply(self$tmle_params, function(tmle_param) {
           if (inherits(tmle_param, "Param_med")) {
+            tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
             tmle_param$clever_covariates(fold_number = "full", update = T)
             tmle_param$estimates(fold_number = "full", update = T)
           }
@@ -523,14 +549,18 @@ tmle3_Update <- R6Class(
         cat(sprintf("max(abs(ED)): %e\n", max(ED_criterion)))
       }
 
-      # full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
-      # temp <- data.frame(current = full_IC %>% colMeans,
-      #            threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
-      # )
-      # if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
+      full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
+      if (!is.null(full_IC)) {
+        temp <- data.frame(current = full_IC %>% colMeans,
+                           threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
+        )
+        if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
+      } else {
+        if_conv_by_dim <- F
+      }
 
       return(all(ED_criterion <= ED_threshold)
-             # | if_conv_by_dim
+             | if_conv_by_dim
              )
     },
     update_best = function(likelihood) {

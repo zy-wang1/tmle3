@@ -45,7 +45,13 @@ Param_middle_projection <- R6Class(
   class = TRUE,
   inherit = Param_base,
   public = list(
-    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y", static_likelihood = NULL) {
+    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y", static_likelihood = NULL, n_resampling = NULL) {
+      if(inherits(observed_likelihood, "Targeted_Likelihood")){
+        fold_number <- observed_likelihood$updater$update_fold
+      } else {
+        fold_number <- "full"
+      }
+
       temp_node_names <- names(observed_likelihood$training_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
@@ -64,29 +70,88 @@ Param_middle_projection <- R6Class(
       super$initialize(observed_likelihood, list(), outcome_node = outcome_node)
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
-      # todo: extend for stochastic
-      private$.cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
-      private$.cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
 
-      # Train the gradient
-      private$.gradient <- Gradient$new(observed_likelihood,
-                                        ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
-                                                        cf_likelihood_control = self$cf_likelihood_control,
-                                                        intervention_list_treatment = self$intervention_list_treatment,
-                                                        intervention_list_control = self$intervention_list_control,
-                                                        cf_task_treatment = self$cf_task_treatment,
-                                                        cf_task_control = self$cf_task_control,
-                                                        static_likelihood = self$static_likelihood
-                                        ),
-                                        projection_task_generator = gradient_generator_middle,
-                                        target_nodes =  self$update_nodes)
+      tmle_task <- observed_likelihood$training_task
+      obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
+      obs_variable_names <- colnames(obs_data)
 
-      if(inherits(observed_likelihood, "Targeted_Likelihood")){
-        fold_number <- observed_likelihood$updater$update_fold
+      if (!is.null(n_resampling)) {  # use expanded Monte Carlo samples to train the HAL projection
+        # temp_input <- generate_Zheng_data(B = n_resampling, tau = 1, if_LY_misspec = T) %>% data.frame()
+        # names(temp_input)[grep("L1_1", names(temp_input))] <- "L_1"
+
+        temp_input <- tmle_task$get_tmle_node(temp_node_names[1])
+        temp_input <- rbind(
+          temp_input[c(
+            sample(nrow(temp_input), abs(round(n_resampling)), replace = T)
+            # 1:n_resampling
+          ), ]
+        )
+        for (i in 2:length(temp_node_names)) {
+          temp_input <- cbind(temp_input, 1) %>% as.data.frame()
+          names(temp_input)[ncol(temp_input)] <- temp_node_names[i]
+          temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[1:i])
+          temp_input[,ncol(temp_input)] <- rbinom(temp_task$nrow, 1, static_likelihood$get_likelihood(temp_task, node = temp_node_names[i]))
+        }
+
+
+        # temp_input <- expand_values(variables = obs_variable_names)  # all possible inputs
+        # temp_input <- obs_data
+        # temp_input <- rbind(
+        #   # obs_data,
+        #                     temp_input[c(
+        #                            # sample(nrow(temp_input), abs(round(n_resampling)), replace = T)
+        #                       1:n_resampling
+        #                            ), ]
+        # )
+        temp_input <- data.frame(temp_input,
+                                 id = 1:nrow(temp_input),
+                                 t = 0)
+        # temp_input <- rbind(temp_input, obs_data)
+        temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem)
+
+        # private$.cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(temp_task)[[1]]
+        # private$.cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(temp_task)[[1]]
+        # Train the gradient
+        private$.gradient <- Gradient$new(observed_likelihood,
+                                          ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
+                                                          cf_likelihood_control = self$cf_likelihood_control,
+                                                          intervention_list_treatment = self$intervention_list_treatment,
+                                                          intervention_list_control = self$intervention_list_control,
+                                                          # cf_task_treatment = self$cf_task_treatment,
+                                                          # cf_task_control = self$cf_task_control,
+                                                          static_likelihood = self$static_likelihood
+                                          ),
+                                          projection_task_generator = gradient_generator_middle,
+                                          target_nodes =  self$update_nodes)
+
+        private$.gradient$train_projections(temp_task, fold_number = fold_number)
       } else {
-        fold_number <- "full"
+        # todo: extend for stochastic
+        # private$.cf_task_treatment <- self$cf_likelihood_treatment$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+        # private$.cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(observed_likelihood$training_task)[[1]]
+        # Train the gradient
+        private$.gradient <- Gradient$new(observed_likelihood,
+                                          ipw_args = list(cf_likelihood_treatment = self$cf_likelihood_treatment,
+                                                          cf_likelihood_control = self$cf_likelihood_control,
+                                                          intervention_list_treatment = self$intervention_list_treatment,
+                                                          intervention_list_control = self$intervention_list_control,
+                                                          # cf_task_treatment = self$cf_task_treatment,
+                                                          # cf_task_control = self$cf_task_control,
+                                                          static_likelihood = self$static_likelihood
+                                          ),
+                                          projection_task_generator = gradient_generator_middle,
+                                          target_nodes =  self$update_nodes)
+
+        private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
       }
-      private$.gradient$train_projections(self$observed_likelihood$training_task, fold_number = fold_number)
+
+
+
+
+
+
+
+
 
       setattr(self$observed_likelihood, "target_nodes", self$update_nodes)
       self$observed_likelihood$get_likelihoods(self$observed_likelihood$training_task, fold_number = fold_number)
@@ -98,11 +163,6 @@ Param_middle_projection <- R6Class(
         # private$.gradient$expand_task(private$.cf_task_control, node)
       }
 
-      if (is.null(tmle_task)) {
-        tmle_task <- self$observed_likelihood$training_task
-      }
-      obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
-      obs_variable_names <- colnames(obs_data)
       list_all_predicted_lkd <- lapply(1:length(temp_node_names), function(loc_node) {
         if (loc_node > 1) {
           # currently only support univariate node for t>0
@@ -229,6 +289,8 @@ Param_middle_projection <- R6Class(
       )
       vec_est <- left_join(obs_data[, tmle_task$npsem[[1]]$variables], library_L0)$output
       psi <- mean(vec_est)
+
+      EIC <- cbind(EIC, vec_est - psi)
 
       IC <- rowSums(EIC)
       result <- list(psi =

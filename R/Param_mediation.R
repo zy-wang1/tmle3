@@ -144,31 +144,29 @@ Param_med <- R6Class(
           }
           names(list_newH) <- temp_node_names
 
-          if (submodel_type != "logistic") {  # get EIC as clever covariates for EIC submodels
-            list_D <- list()
-            for (loc_node in 1:length(list_newH)) {
-              if(!is.null(list_newH[[loc_node]])) {
-                # ZW todo: for discretized variables
-                current_ind <- (obs_data[[tmle_task$npsem[[loc_node]]$variables]] == 1)*1
-                temp_vec <- list_newH[[loc_node]] %>% as.vector
-                if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node], fold_number) else
-                  temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node], fold_number)
-                temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)  # transform density to conditional mean
-                list_D[[loc_node]] <- (current_ind - temp_p) * temp_vec
-              }
+          # calculate EIC components
+          list_D <- list()
+          for (loc_node in 1:length(list_newH)) {
+            if(!is.null(list_newH[[loc_node]])) {
+              # ZW todo: for discretized variables
+              current_ind <- (obs_data[[tmle_task$npsem[[loc_node]]$variables]] == 1)*1
+              temp_vec <- list_newH[[loc_node]] %>% as.vector
+              temp_p <- self$observed_likelihood$get_likelihoods(tmle_task, temp_node_names[loc_node], fold_number)
+              # if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node], fold_number) else
+              #   temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node], fold_number)
+              temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)  # transform density to conditional mean
+              list_D[[loc_node]] <- (current_ind - temp_p) * temp_vec
             }
-            # list_D[[1]] <- vec_est - psi
-            names(list_D) <- names(list_newH)
-            list_newH <- list_D  # EIC is the clever covariates for EIC submodels
-
-            # if (identical(tmle_task, self$observed_likelihood$training_task)) {
-            #   if (fold_number == "full") {  # cache them btw since already calcualted; but only for obs tasks
-            #     private$.list_D <- list_D
-            #   } else if (fold_number == "validation") {
-            #     private$.list_D_val <- list_D
-            #   }
-            # }
           }
+          # list_D[[1]] <- vec_est - psi
+          names(list_D) <- names(list_newH)
+
+          if (submodel_type != "logistic") {  # get EIC as clever covariates for EIC submodels
+            list_newH <- list_D  # EIC is the clever covariates for EIC submodels
+          }
+
+          list_newH[[length(list_newH) + 1]] <- do.call(cbind, list_D)
+          names(list_newH)[length(list_newH)] <- "IC"  # to use in by dimension convergence
 
           if (identical(tmle_task, self$observed_likelihood$training_task)) {  # cache for obs task
             if (fold_number == "full") {
@@ -315,6 +313,7 @@ Param_med <- R6Class(
 
         list_D <- self$clever_covariates(tmle_task, fold_number, submodel_type = "EIC")
         list_D[[1]] <- vec_est - psi
+        list_D <- list_D[-which(names(list_D) == "IC")]
 
         vec_D <- list_D %>% compact %>% pmap_dbl(sum)
         IC <- vec_D
@@ -360,9 +359,9 @@ Param_med <- R6Class(
       return(private$.list_D_val)
     },
     update_nodes = function() {
-      if (is.null(tmle_task)) {
+      # if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
-      }
+      # }
       temp_node_names <- names(tmle_task$npsem)
       loc_A <- grep("A", temp_node_names)
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)

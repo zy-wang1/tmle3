@@ -34,7 +34,7 @@ tmle3_Spec_med <- R6Class(
 
       return(likelihood)
     },
-    make_params = function(tmle_task, likelihood, options = NULL, if_projection = NULL, static_likelihood = NULL) {
+    make_params = function(tmle_task, likelihood, options = NULL, if_projection = NULL, static_likelihood = NULL, n_resampling = NULL) {
       if (is.null(static_likelihood)) static_likelihood <- likelihood
       if (is.null(options)) options <- list("tc")
 
@@ -71,7 +71,7 @@ tmle3_Spec_med <- R6Class(
         if (is.null(if_projection)) {
           param <- Param_med$new(likelihood, treatment, control, outcome_node = last(temp_names))
         } else if (if_projection) {
-          param <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood)
+          param <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
         }
         return(param)
       })
