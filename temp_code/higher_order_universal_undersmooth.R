@@ -615,3 +615,94 @@ simulate_data <- function(n_sim, n_mode) {
     return(report)
   })
 }
+
+
+
+
+
+
+
+
+
+saveRDS(report_list, "./temp_output/higher_order_universal_undersmooth_ZW-20201223.rds")
+
+
+
+
+
+
+plot_df <- report_list[] %>% lapply(function(x) x[, 1]) %>% abind::abind(along = 0)
+colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
+plot_df <- data.frame(plot_df)
+plot_df[["TV"]] <- record_TV[3:10, 4]
+plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
+plot_df <- plot_df[
+  # (1:4)*2-1
+  , -c(1:2, 7)]
+
+library(reshape2)
+library(ggrepel)
+test_data_long <- reshape2::melt(plot_df, id="Bias.Mass")  # convert to long format
+
+plot1 <- ggplot(data=test_data_long,
+                aes(x=Bias.Mass, y=value, colour=variable, label = variable, group = variable)) +
+  geom_line() + geom_text_repel(data = test_data_long %>% filter(Bias.Mass == 0.01), show.legend = FALSE) + geom_point() + theme_classic() + geom_hline(yintercept = 0, linetype="dashed", color = "black") +
+  labs(y = "Bias", x = "Bias Mass", color = "Estimator") +
+  scale_x_discrete(name ="Bias Mass",
+                   breaks = plot_df$Bias.Mass)
+plot1
+ggsave("./temp_output/bias_higher_order_universal_undersmooth.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
+
+
+
+
+plot_df <- report_list %>% lapply(function(x) abs(x[, 1])/x[, 2]) %>% abind::abind(along = 0)
+colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
+plot_df <- data.frame(plot_df)
+plot_df[["TV"]] <- record_TV[3:10, 4]
+plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
+plot_df <- plot_df[
+  # (1:4)*2-1
+  , -c(1, 2, 3, 7)]
+
+library(reshape2)
+library(ggrepel)
+test_data_long <- reshape2::melt(plot_df, id="Bias.Mass")  # convert to long format
+
+plot1 <- ggplot(data=test_data_long,
+                aes(x=Bias.Mass, y=value, colour=variable, label = variable, group = variable)) +
+  geom_line() + geom_text_repel(data = test_data_long %>% filter(Bias.Mass == 0.01), show.legend = FALSE) + geom_point() + theme_classic() + geom_hline(yintercept = 0, linetype="dashed", color = "black") +
+  labs(y = "Bias/SD Ratio", x = "Bias Mass", color = "Estimator") +
+  scale_x_discrete(name ="Bias Mass",
+                   breaks = plot_df$Bias.Mass)
+plot1
+ggsave("./temp_output/ratio_higher_order_universal_undersmooth.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
+
+
+
+
+
+
+
+
+plot_df <- report_list[] %>% lapply(function(x) x[, 3]) %>% abind::abind(along = 0)
+colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
+plot_df <- data.frame(plot_df)
+plot_df[["TV"]] <- record_TV[3:10, 4]
+plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
+plot_df <- plot_df[
+  # (1:4)*2-1
+  , -c(1:3, 7)]
+
+library(reshape2)
+library(ggrepel)
+test_data_long <- reshape2::melt(plot_df, id="Bias.Mass")  # convert to long format
+
+plot1 <- ggplot(data=test_data_long,
+                aes(x=Bias.Mass, y=value, colour=variable, label = variable, group = variable)) +
+  geom_line() + geom_text_repel(data = test_data_long %>% filter(Bias.Mass == 0.01), show.legend = FALSE) + geom_point() + theme_classic() + geom_hline(yintercept = 0, linetype="dashed", color = "black") +
+  labs(y = "MSE", x = "Bias Mass", color = "Estimator") +
+  scale_x_discrete(name ="Bias Mass",
+                   breaks = plot_df$Bias.Mass)
+plot1
+ggsave("./temp_output/mse_higher_order_universal_undersmooth.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
