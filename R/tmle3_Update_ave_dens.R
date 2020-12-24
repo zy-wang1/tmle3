@@ -44,8 +44,8 @@
 #'
 #' @export
 #
-tmle3_Update <- R6Class(
-  classname = "tmle3_Update",
+tmle3_Update_ave_dens <- R6Class(
+  classname = "tmle3_Update_ave_dens",
   portable = TRUE,
   class = TRUE,
   public = list(
@@ -177,7 +177,7 @@ tmle3_Update <- R6Class(
         # For backwards compatibility:
         # In future, clever covariate functions should accept a "node" and "submodel_type" argument.
         args <- list(for_fitting = for_fitting, submodel_type = submodel_type, fold_number = fold_number, tmle_task = tmle_task
-             ,node = update_node)
+                     ,node = update_node)
         return(sl3:::call_with_args(tmle_param$clever_covariates, args))
         # if("for_fitting" %in% formal_args) {
         #   return(tmle_param$clever_covariates(tmle_task, fold_number, for_fitting = for_fitting))
@@ -217,10 +217,6 @@ tmle3_Update <- R6Class(
       #   }
 
       observed <- tmle_task$get_tmle_node(update_node)
-      if (self$tmle_params[[1]]$type == "middle_survival") {
-        observed <- observed[!is.na(observed)]
-      }
-
       initial <- likelihood$get_likelihood(
         tmle_task, update_node,
         fold_number)
@@ -270,7 +266,7 @@ tmle3_Update <- R6Class(
 
 
 
-      if (drop_censored & !(self$tmle_params[[1]]$type == "middle_survival")) {
+      if (drop_censored) {
         censoring_node <- tmle_task$npsem[[update_node]]$censoring_node$name
         if (!is.null(censoring_node)) {
           observed_node <- tmle_task$get_tmle_node(censoring_node)
@@ -399,7 +395,7 @@ tmle3_Update <- R6Class(
         risk_val <- risk(epsilon)
         risk_zero <- risk(0)
 
-         #TODO: consider if we should do this
+        #TODO: consider if we should do this
         if(risk_zero<=risk_val){
 
           epsilon <- 0
@@ -568,7 +564,7 @@ tmle3_Update <- R6Class(
 
       return(all(ED_criterion <= ED_threshold)
              | if_conv_by_dim
-             )
+      )
     },
     update_best = function(likelihood) {
       current_step <- self$step_number
@@ -645,16 +641,16 @@ tmle3_Update <- R6Class(
       }
     },
     register_param = function(new_params) {
-      if (inherits(new_params, "Param_base")) {
-        new_params <- list(new_params)
-      }
-      private$.tmle_params <- c(private$.tmle_params, new_params)
-      private$.targeted_components <- unlist(lapply(private$.tmle_params, `[[`, "targeted"))
-      new_update_nodes <- unlist(lapply(new_params, `[[`, "update_nodes"))
-      private$.update_nodes <- unique(c(
-        private$.update_nodes,
-        new_update_nodes
-      ))
+      # if (inherits(new_params, "Param_base")) {
+      #   new_params <- list(new_params)
+      # }
+      # private$.tmle_params <- c(private$.tmle_params, new_params)
+      # private$.targeted_components <- unlist(lapply(private$.tmle_params, `[[`, "targeted"))
+      # new_update_nodes <- unlist(lapply(new_params, `[[`, "update_nodes"))
+      # private$.update_nodes <- unique(c(
+      #   private$.update_nodes,
+      #   new_update_nodes
+      # ))
     },
     set_estimates = function(tmle_task, update_fold = "full"){
       private$.current_estimates <- lapply(self$tmle_params, function(tmle_param) {

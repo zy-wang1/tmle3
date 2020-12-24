@@ -86,6 +86,22 @@ middle_task <- function(data, node_list, variable_types = NULL, ...) {
 
 #' @export
 #' @rdname point_tx
+middle_task_drop_censored <- function(data, node_list, variable_types = NULL, ...) {
+  setDT(data)
+
+  npsem <- middle_npsem(node_list, variable_types)
+
+  if (!is.null(node_list$id)) {
+    tmle_task <- tmle3_Task_drop_censored$new(data, npsem = npsem, id = node_list$id, ...)
+  } else {
+    tmle_task <- tmle3_Task_drop_censored$new(data, npsem = npsem, ...)
+  }
+
+  return(tmle_task)
+}
+
+#' @export
+#' @rdname point_tx
 middle_likelihood <- function(tmle_task, learner_list) {
   factor_list <- list()
 
@@ -673,3 +689,12 @@ expit <- function(x) {
 
 #' @export
 scale_01 <- function(x) scale(x, center = min(x), scale = max(x) - min(x))
+
+#' @export
+scale_bounded_relu <- function(x, move = 1, upper = 0.95, lower = 0.1) {
+  x <- x + move
+  x[x >= upper] <- upper
+  if (upper > 1) x <- x/upper
+  x[x <= lower] <- lower
+  return(x)
+}
