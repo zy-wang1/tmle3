@@ -2,7 +2,7 @@
 # 4, [-5, 5] 30 grids; biased, HAL, empirical, 1-TMLE, 2-TMLE comparison
 # bias 0.01 to 0.1
 {
-  B <- 300
+  B <- 1000
   library(parallel)
   set.seed(123)
 
@@ -66,7 +66,7 @@
                             p = hal_pmf$p / bin_width)
 
       # biased initial
-      temp_p <- hal_pmf$p
+      temp_p <- np_pmf$p
       temp_p <- temp_p + delta_bias
       temp_p <- temp_p/sum(temp_p)
       biased_pmf <- data.frame(x = support_points, p = temp_p)
@@ -285,16 +285,18 @@
 
 
 # saveRDS(report_list, "./temp_output/higher_order_by_mass_ZW-20201223.rds")
-
+saveRDS(report_list, "./temp_output/higher_order_by_mass_1k_ZW-20201223.rds")
 
 plot_df <- report_list %>% lapply(function(x) x[, 3]) %>% abind::abind(along = 0)
 colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
 plot_df <- data.frame(plot_df)
-plot_df[["TV"]] <- record_TV[3:10, 4]
+# plot_df[["TV"]] <- record_TV[3:10, 4]
 plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
 plot_df <- plot_df[
   # (1:4)*2-1
-  , -c(1:3, 7)]
+  , -c(1:3
+       # , 7
+       )]
 
 library(reshape2)
 library(ggrepel)
@@ -307,8 +309,7 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-# ggsave("./temp_output/by_bias_mass.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
-ggsave("./temp_output/by_bias_mass_mse.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/mse_universal_1k.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
 
 
 
@@ -317,11 +318,13 @@ ggsave("./temp_output/by_bias_mass_mse.jpg", plot1, width = 12, height = 8, unit
 plot_df <- report_list %>% lapply(function(x) x[, 1]) %>% abind::abind(along = 0)
 colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
 plot_df <- data.frame(plot_df)
-plot_df[["TV"]] <- record_TV[3:10, 4]
+# plot_df[["TV"]] <- record_TV[3:10, 4]
 plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
 plot_df <- plot_df[
   (1:4)*2-1
-  , -c(1:2, 7)]
+  , -c(1:2
+       # , 7
+       )]
 
 library(reshape2)
 library(ggrepel)
@@ -334,7 +337,7 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-ggsave("./temp_output/by_bias_mass.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/bias_universal_1k.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
 
 
 
@@ -345,11 +348,13 @@ ggsave("./temp_output/by_bias_mass.jpg", plot1, width = 8, height = 8, units = "
 plot_df <- report_list %>% lapply(function(x) abs(x[, 1])/x[, 2]) %>% abind::abind(along = 0)
 colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
 plot_df <- data.frame(plot_df)
-plot_df[["TV"]] <- record_TV[3:10, 4]
+# plot_df[["TV"]] <- record_TV[3:10, 4]
 plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
 plot_df <- plot_df[
   # (1:4)*2-1
-  , -c(1, 2, 3, 7)]
+  , -c(1, 2, 3
+       # , 7
+       )]
 
 library(reshape2)
 library(ggrepel)
@@ -362,4 +367,4 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-ggsave("./temp_output/by_bias_mass_ratio.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/ratio_universal_1k.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
