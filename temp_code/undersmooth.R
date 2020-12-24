@@ -611,9 +611,7 @@ return(report)
 })
 
 
-saveRDS(report_list, "./temp_output/higher_order_by_mass_undersmooth_linear_combination_ZW-20201223.rds")
-# saveRDS(report_list, "./temp_output/higher_order_by_mass_undersmooth_universal_ZW-20201223.rds")
-# saveRDS(report_list, "./temp_output/higher_order_by_mass_undersmooth_ZW-20201223.rds")
+# saveRDS(report_list, "./temp_output/higher_order_linear_combination_undersmooth_ZW-20201223.rds")
 
 
 
@@ -640,16 +638,16 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-ggsave("./temp_output/by_bias_mass_us_mx.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/bias_linear_combination_undersmooth.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
 
 
 
 
-plot_df <- report_list %>% lapply(function(x) abs(x[, 1])/x[, 2]) %>% abind::abind(along = 0)
+plot_df <- report_list[-8] %>% lapply(function(x) abs(x[, 1])/x[, 2]) %>% abind::abind(along = 0)
 colnames(plot_df) <- c("NP-MLE", "HAL-MLE", "Biased Initial", "Pn 1TMLE", "Tilde 1TMLE", "Tilde 2TMLE")
 plot_df <- data.frame(plot_df)
-plot_df[["TV"]] <- record_TV[3:10, 4]
-plot_df[["Bias.Mass"]] <- seq(0.01, 0.08, 0.01) %>% as.factor()
+plot_df[["TV"]] <- record_TV[3:9, 4]
+plot_df[["Bias.Mass"]] <- seq(0.01, 0.07, 0.01) %>% as.factor()
 plot_df <- plot_df[
   # (1:4)*2-1
   , -c(1, 2, 3, 7)]
@@ -665,7 +663,7 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-ggsave("./temp_output/by_bias_mass_ratio_us.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/ratio_linear_combination_undersmooth.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
 
 
 
@@ -694,5 +692,5 @@ plot1 <- ggplot(data=test_data_long,
   scale_x_discrete(name ="Bias Mass",
                    breaks = plot_df$Bias.Mass)
 plot1
-# ggsave("./temp_output/by_bias_mass.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
-# ggsave("./temp_output/by_bias_mass_mse_us_mx.jpg", plot1, width = 12, height = 8, units = "in", dpi = 300)
+ggsave("./temp_output/mse_linear_combination_undersmooth.jpg", plot1, width = 8, height = 8, units = "in", dpi = 300)
+
