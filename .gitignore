@@ -16,4 +16,6 @@ parallel_*/*.R
 temp_output
 temp_code/*
 temp_code
+man
 man/*.Rd
+NAMESPACE
