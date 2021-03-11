@@ -20,8 +20,12 @@ tmle3_Spec_mediation <- R6Class(
     },
     make_tmle_task = function(data, node_list, if_drop_censored = NULL, ...) {
       variable_types <- self$options$variable_types
-      if(is.null(if_drop_censored)) tmle_task <- mediation_task(data, node_list, variable_types)
-      if(if_drop_censored == T) tmle_task <- mediation_task_drop_censored(data, node_list, variable_types)
+      if(is.null(if_drop_censored)) {
+        tmle_task <- mediation_task(data, node_list, variable_types)
+      } else {
+        if(if_drop_censored == T) tmle_task <- mediation_task_drop_censored(data, node_list, variable_types) else
+          tmle_task <- mediation_task(data, node_list, variable_types)
+      }
       return(tmle_task)
     },
     make_initial_likelihood = function(tmle_task, learner_list = NULL) {

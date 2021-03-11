@@ -59,12 +59,12 @@ Param_medidation <- R6Class(
       }
       intervention_nodes <- union(names(self$intervention_list_treatment), names(self$intervention_list_control))
 
-
       if (fold_number == "full") {  # tmle
         list_newH <- private$.list_newH_EIC
       } else if (fold_number == "validation") {  # cvtmle
         list_newH <- private$.list_newH_EIC_val
       }  # load cached obs task clever covariates in case its for convergence check
+
       if (!is.null(list_newH) & update == F & identical(tmle_task, self$observed_likelihood$training_task)) {  # for faster convergence check
         if (!is.null(node)) {  # return partial list of covariates if requested
           return(list_newH[node])
@@ -123,18 +123,14 @@ Param_medidation <- R6Class(
           names(intervention_levels_treat) <- names(self$intervention_list_treatment)
           names(intervention_levels_control) <- names(self$intervention_list_control)
 
-          list_H <- get_obs_H(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
-                              cf_task_treatment, cf_task_control,
-                              intervention_variables, intervention_levels_treat, intervention_levels_control,
-                              fold_number)
-          list_Q_1 <- get_obs_Q(tmle_task, obs_data, list_H,
-                                intervention_variables, intervention_levels_treat, intervention_levels_control,
-                                list_all_predicted_lkd,  # val version decided above for fold_number == "validation"
-                                lt = 1)
-          list_Q_0 <- get_obs_Q(tmle_task, obs_data, list_H,
-                                intervention_variables, intervention_levels_treat, intervention_levels_control,
-                                list_all_predicted_lkd,
-                                lt = 0)
+          list_H <- get_obs_H_list(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
+                                   cf_task_treatment, cf_task_control,
+                                   intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                   fold_number)
+          list_Q <- get_obs_Q_list(tmle_task, obs_data,
+                                   intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                   list_all_predicted_lkd  # val version decided above for fold_number == "validation"
+          )
 
           list_newH <- list()
           for (loc_node in 1:length(list_H)) {
