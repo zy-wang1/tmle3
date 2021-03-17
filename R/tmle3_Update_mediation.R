@@ -44,14 +44,14 @@
 #'
 #' @export
 #
-tmle3_Update <- R6Class(
-  classname = "tmle3_Update",
+tmle3_Update_mediation <- R6Class(
+  classname = "tmle3_Update_mediation",
   portable = TRUE,
   class = TRUE,
   public = list(
     # TODO: change maxit for test
-    initialize = function(maxit = 100, cvtmle = TRUE, one_dimensional = FALSE,
-                          constrain_step = FALSE, delta_epsilon = 1e-4,
+    initialize = function(maxit = 100, cvtmle = FALSE, one_dimensional = FALSE,
+                          constrain_step = TRUE, delta_epsilon = 1e-4,
                           convergence_type = c("scaled_var", "sample_size"),
                           fluctuation_type = c("standard", "weighted"),
                           optim_delta_epsilon = TRUE,
@@ -138,9 +138,6 @@ tmle3_Update <- R6Class(
           tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
           tmle_param$clever_covariates(fold_number = fold_number, update = T)
           tmle_param$estimates(fold_number = fold_number, update = T)
-        } else if (inherits(tmle_params[[1]], "Param_mediation")) {
-          tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
-          tmle_param$estimates(fold_number = fold_number, update = T)
         }
       })
 
@@ -149,9 +146,6 @@ tmle3_Update <- R6Class(
           if (inherits(tmle_param, "Param_med")) {
             tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
             tmle_param$clever_covariates(fold_number = "full", update = T)
-            tmle_param$estimates(fold_number = "full", update = T)
-          } else if (inherits(tmle_params[[1]], "Param_mediation")) {
-            tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
             tmle_param$estimates(fold_number = "full", update = T)
           }
         })
@@ -183,7 +177,7 @@ tmle3_Update <- R6Class(
         # For backwards compatibility:
         # In future, clever covariate functions should accept a "node" and "submodel_type" argument.
         args <- list(for_fitting = for_fitting, submodel_type = submodel_type, fold_number = fold_number, tmle_task = tmle_task
-             ,node = update_node)
+                     ,node = update_node)
         return(sl3:::call_with_args(tmle_param$clever_covariates, args))
         # if("for_fitting" %in% formal_args) {
         #   return(tmle_param$clever_covariates(tmle_task, fold_number, for_fitting = for_fitting))
@@ -380,11 +374,6 @@ tmle3_Update <- R6Class(
           if(is.function(delta_epsilon)) {
             delta_epsilon <- delta_epsilon(submodel_data$H)
           }
-          # ZW: allow 0 delta_epsilon
-          if (delta_epsilon == 0) {
-            warning("delta_epsilon=0 for optim_delta_epsilon=T! delta_epsilon is set to 1E-8. ")
-            delta_epsilon <- 1E-8
-          }
           delta_epsilon <- c(0,delta_epsilon)
 
           min_eps = min(delta_epsilon)
@@ -410,7 +399,7 @@ tmle3_Update <- R6Class(
         risk_val <- risk(epsilon)
         risk_zero <- risk(0)
 
-         #TODO: consider if we should do this
+        #TODO: consider if we should do this
         if(risk_zero<=risk_val){
 
           epsilon <- 0
@@ -579,7 +568,7 @@ tmle3_Update <- R6Class(
 
       return(all(ED_criterion <= ED_threshold)
              | if_conv_by_dim
-             )
+      )
     },
     update_best = function(likelihood) {
       current_step <- self$step_number

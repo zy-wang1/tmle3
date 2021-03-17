@@ -97,12 +97,11 @@ mediation_likelihood <- function(tmle_task, learner_list) {
 
 
 #' @export
-get_current_Q <- function(loc_node,
-                          tmle_task, obs_data,
+get_current_Q <- function(loc_node, which_Q,
+                          tmle_task, obs_variable_names,
                           intervention_variables, intervention_levels_treat, intervention_levels_control,
                           list_all_predicted_lkd
 ) {
-  obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)  # this has to be the obs task, but only the node names are needed
   loc_A <- grep("A", temp_node_names)
   loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
@@ -111,11 +110,14 @@ get_current_Q <- function(loc_node,
 
   # ind_var is the order among variables
   ind_var <- loc_current_var <- which(obs_variable_names == tmle_task$npsem[[loc_node]]$variables)
+  # decide which Q to get
+  ind_var <- ind_var + which_Q
+
   intervention_variables_loc_needed <- intervention_variables_loc[intervention_variables_loc < ind_var]
 
   # only update t!=0 and non-A nodes
   if (loc_node %in% c(loc_Z, loc_RLY)) {
-    df_to_update <- temp_current <- list_all_predicted_lkd[[loc_node-1]] # Q_L_t will integrate out L_t, so L_t is not an input for Q_L_t
+    df_to_update <- temp_current <- list_all_predicted_lkd[[loc_node]] # decide input matrix; the last column might not be fully used
 
     # get Q current
     {
@@ -171,11 +173,10 @@ get_current_Q <- function(loc_node,
 
 #' @export
 get_current_H <- function(loc_node,
-                          tmle_task, obs_data,
+                          tmle_task, obs_variable_names,
                           intervention_variables, intervention_levels_treat, intervention_levels_control,
                           list_all_predicted_lkd
 ) {
-  obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)  # this has to be the obs task, but only the node names are needed
   loc_A <- grep("A", temp_node_names)
   loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
@@ -185,6 +186,8 @@ get_current_H <- function(loc_node,
   # ind_var is the order among variables
   ind_var <- loc_current_var <- which(obs_variable_names == tmle_task$npsem[[loc_node]]$variables)
   intervention_variables_loc_needed <- intervention_variables_loc[intervention_variables_loc < ind_var]
+
+  temp_current <- list_all_predicted_lkd[[loc_node]] # decide input matrix; the last column might not be fully used
 
   # get H current
   {
@@ -245,6 +248,7 @@ get_current_H <- function(loc_node,
         , 1/part_A*part_LR, 0)
     }
   }
+  return(H_current)
 }
 
 
@@ -300,13 +304,13 @@ get_obs_Q_list <- function(tmle_task, obs_data,
                                        }
                                        # for all non-A, non-0 variables, calculate the variable by rule
                                        # for Z's, use A = 0 values; outputs are predicted probs at each possible comb
-                                       loc_Z_needed <- loc_Z[loc_Z > loc_node]  # only product children variables
+                                       loc_Z_needed <- loc_Z[loc_Z >= loc_node]  # only product children variables
                                        # temp_list_0 <- lapply(loc_Z_needed,
                                        temp_list_0 <- lapply(loc_Z_needed,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_0, list_all_predicted_lkd[[each_t]])$output
                                                              })
-                                       loc_RLY_needed <- loc_RLY[loc_RLY > loc_node]
+                                       loc_RLY_needed <- loc_RLY[loc_RLY >= loc_node]
                                        temp_list_1 <- lapply(loc_RLY_needed,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_1, list_all_predicted_lkd[[each_t]])$output

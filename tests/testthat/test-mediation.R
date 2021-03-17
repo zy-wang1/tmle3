@@ -18,7 +18,7 @@ for (code in code_list) source(code)
 
 set.seed(1234)
 
-data_sim <- generate_Zheng_data(B = 1000, tau = 2, if_LY_misspec = F)
+data_sim <- generate_Zheng_data(B = 1000, tau = 1, if_LY_misspec = F)
 data_wide <- data.frame(data_sim)
 
 node_list <- list(L_0 = c("L1_0", "L2_0"),
@@ -27,12 +27,12 @@ node_list <- list(L_0 = c("L1_0", "L2_0"),
                   Z_1 = "Z_1",
                   L_1 = "L1_1",
                   Y_1 = "Y_1"
-                  ,
-                  A_2 = "A_2",
-                  R_2 = "R_2",
-                  Z_2 = "Z_2",
-                  L_2 = "L1_2",
-                  Y_2 = "Y_2"
+                  # ,
+                  # A_2 = "A_2",
+                  # R_2 = "R_2",
+                  # Z_2 = "Z_2",
+                  # L_2 = "L1_2",
+                  # Y_2 = "Y_2"
                   # ,
                   # A_3 = "A_3",
                   # R_3 = "R_3",
@@ -74,3 +74,48 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
   learner_list
 )
 
+# define RI-based mediation parameter
+tmle_params <- mediation_spec$make_params(tmle_task, initial_likelihood, options = "tc")
+
+# test estimate
+nontargeting <- tmle_params[[1]]$estimates(tmle_task)
+temp_lmed3_nontargeting <- nontargeting$psi
+temp_IC <- nontargeting$IC
+var_D <- var(temp_IC)
+n <- length(temp_IC)
+se <- sqrt(var_D / n)
+CI2 <- temp_lmed3_nontargeting + 1.96 * se
+CI1 <- temp_lmed3_nontargeting - 1.96 * se
+
+
+# test update
+n_subject <- nrow(tmle_task$data)
+tlik <- Targeted_Likelihood$new(initial_likelihood,
+                                submodel_type_by_node = "EIC" ,
+                                updater = list(convergence_type = "scaled_var",
+                                               constrain_step = T,
+                                               optim_delta_epsilon = F,  # fixed small step_size
+                                               one_dimensional=T,
+                                               delta_epsilon=function(x) {
+                                                 ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/n_subject)/log(n_subject),
+                                                        0,
+                                                        ifelse(mean(x %>% as.vector) > 0, 0.001, -0.001)
+                                                 )
+                                               },
+                                               maxit=10
+                                               ,
+                                               cvtmle=F
+                                ))
+tmle_params <- mediation_spec$make_params(tmle_task, tlik)
+tmle_params[[1]]$estimates()$psi
+capture.output(
+  tlik$updater$update(tlik, tmle_task)
+)
+onestep_test <- tmle_params[[1]]$estimates()
+onestep_test_est <- onestep_test$psi
+temp_IC <- onestep_test$IC
+var_D <- var(temp_IC)
+n <- length(temp_IC)
+se <- sqrt(var_D / n)
+CI2_onestep_test <- onestep_test_est + 1.96 * se
+CI1_onestep_test <- onestep_test_est - 1.96 * se

@@ -72,10 +72,12 @@ tmle3_Spec_mediation <- R6Class(
         })
         names(treatment) <- names(control) <- temp_names[loc_A]
         if (is.null(if_projection)) {
-          param <- Param_med$new(likelihood, treatment, control, outcome_node = last(temp_names))
+          param <- Param_medidation$new(likelihood, treatment, control)
+        } else if (!if_projection) {
+          param <- Param_medidation$new(likelihood, treatment, control)
         } else if (if_projection) {
           param <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
-        }
+        } else stop("Error: if_projection needs to be either True or False/NULL. ")
         return(param)
       })
       return(tmle_params)
