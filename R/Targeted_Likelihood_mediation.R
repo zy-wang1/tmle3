@@ -17,7 +17,7 @@
 #'
 #' @export
 Targeted_Likelihood_mediation <- R6Class(
-  classname = "Targeted_Likelihood_mediation",
+  classname = "Targeted_Likelihood",
   portable = TRUE,
   class = TRUE,
   inherit = Likelihood,
@@ -50,7 +50,8 @@ Targeted_Likelihood_mediation <- R6Class(
       if (inherits(self$updater, "tmle3_Update")) {} else tasks_at_step <- tasks_at_step[map_dbl(tasks_at_step, ~nrow(.x$data)) == nrow(self$training_task$data)]
 
 
-      if (!inherits(self$updater, "tmle3_Update_mediation")  ) {
+
+      if (!inherits(self$updater, "tmle3_Update_middle")  ) {
         # the default version
         # If task has attr target_nodes then only update these nodes.
         to_update <- sapply(tasks_at_step, function(task) {
@@ -96,8 +97,7 @@ Targeted_Likelihood_mediation <- R6Class(
         #     self$cache$set_values(likelihood_factor, task, step_number + 1, fold_number, updated_values[[node]])
         #   }
         # }
-      } else
-        if (self$updater$submodel_type == "EIC") {  # for tmle3_Update_mediation
+      } else if (self$updater$submodel_type == "onestep") {  # for tmle3_Update_middle
         update_nodes <- self$updater$update_nodes
 
         # first, calculate all updates

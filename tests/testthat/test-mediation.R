@@ -99,18 +99,25 @@ tlik <- Targeted_Likelihood$new(initial_likelihood,
                                                delta_epsilon=function(x) {
                                                  ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/n_subject)/log(n_subject),
                                                         0,
-                                                        ifelse(mean(x %>% as.vector) > 0, 0.001, -0.001)
+                                                        ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
                                                  )
                                                },
-                                               maxit=10
+                                               maxit=100
                                                ,
                                                cvtmle=F
                                 ))
 tmle_params <- mediation_spec$make_params(tmle_task, tlik)
-tmle_params[[1]]$estimates()$psi
-capture.output(
+# tmle_params[[1]]$estimates()$psi
+tmle_params[[1]]$clever_covariates()$IC %>% colMeans()
+suppressMessages(
   tlik$updater$update(tlik, tmle_task)
 )
+suppressWarnings(suppressMessages(
+  new_est <- tmle_params[[1]]$estimates()$psi
+))
+tmle_params[[1]]$clever_covariates()$IC %>% colMeans()
+new_est
+
 onestep_test <- tmle_params[[1]]$estimates()
 onestep_test_est <- onestep_test$psi
 temp_IC <- onestep_test$IC
@@ -119,3 +126,7 @@ n <- length(temp_IC)
 se <- sqrt(var_D / n)
 CI2_onestep_test <- onestep_test_est + 1.96 * se
 CI1_onestep_test <- onestep_test_est - 1.96 * se
+
+rbind(c(temp_lmed3_nontargeting, CI1, CI2),
+      c(onestep_test_est, CI1_onestep_test, CI2_onestep_test)
+)

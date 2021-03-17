@@ -44,14 +44,14 @@
 #'
 #' @export
 #
-tmle3_Update_mediation <- R6Class(
-  classname = "tmle3_Update_mediation",
+tmle3_Update <- R6Class(
+  classname = "tmle3_Update",
   portable = TRUE,
   class = TRUE,
   public = list(
     # TODO: change maxit for test
-    initialize = function(maxit = 100, cvtmle = FALSE, one_dimensional = FALSE,
-                          constrain_step = TRUE, delta_epsilon = 1e-4,
+    initialize = function(maxit = 100, cvtmle = TRUE, one_dimensional = FALSE,
+                          constrain_step = FALSE, delta_epsilon = 1e-4,
                           convergence_type = c("scaled_var", "sample_size"),
                           fluctuation_type = c("standard", "weighted"),
                           optim_delta_epsilon = TRUE,
@@ -87,16 +87,6 @@ tmle3_Update_mediation <- R6Class(
       names(na_epsilons) <- update_nodes
       private$.epsilons[[current_step]] <- na_epsilons
 
-      # temp_node_names <- names(tmle_task$npsem)
-      # loc_A <- grep("A", temp_node_names)
-      # loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-      # loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("Z", "A")) & strsplit(s, "_")[[1]][2] != 0))
-      # cf_likelihood_treatment <- self$tmle_params[[1]]$cf_likelihood_treatment
-      # cf_likelihood_control <- self$tmle_params[[1]]$cf_likelihood_control
-      # cf_task_treatment <- cf_likelihood_treatment$enumerate_cf_tasks(tmle_task)[[1]]
-      # cf_task_control <- cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
-
-
       for (update_node in update_nodes) {
         # get new submodel fit
         submodel_data <- self$generate_submodel_data(
@@ -105,20 +95,6 @@ tmle3_Update_mediation <- R6Class(
           drop_censored = TRUE,
           for_fitting = T
         )
-
-        # if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
-        #   if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
-        #     # updates should be fitted at corresponding cf densities
-        #     if (update_node %in% temp_node_names[loc_Z]) {
-        #       # z node find updates in control tasks
-        #       submodel_data$initial <- likelihood$get_likelihood(cf_task_control, update_node)
-        #     } else {
-        #       submodel_data$initial <- likelihood$get_likelihood(cf_task_treatment, update_node)
-        #     }
-        #   }
-        # }
-        #
-
 
         new_epsilon <- self$fit_submodel(submodel_data)
 
@@ -138,6 +114,9 @@ tmle3_Update_mediation <- R6Class(
           tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
           tmle_param$clever_covariates(fold_number = fold_number, update = T)
           tmle_param$estimates(fold_number = fold_number, update = T)
+        } else if (inherits(tmle_params[[1]], "Param_mediation")) {
+          tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
+          tmle_param$estimates(fold_number = fold_number, update = T)
         }
       })
 
@@ -146,6 +125,9 @@ tmle3_Update_mediation <- R6Class(
           if (inherits(tmle_param, "Param_med")) {
             tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
             tmle_param$clever_covariates(fold_number = "full", update = T)
+            tmle_param$estimates(fold_number = "full", update = T)
+          } else if (inherits(tmle_params[[1]], "Param_mediation")) {
+            tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
             tmle_param$estimates(fold_number = "full", update = T)
           }
         })
@@ -162,7 +144,7 @@ tmle3_Update_mediation <- R6Class(
 
 
       if(!(inherits(likelihood, "Targeted_Likelihood"))) {
-        submodel_type <- "logistic"
+        submodel_type <- "EIC"
       } else {
         submodel_type <- likelihood$submodel_type(update_node)
       }
@@ -296,15 +278,6 @@ tmle3_Update_mediation <- R6Class(
       weights <- submodel_data$weights
       # TODO
 
-      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
-        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
-          if (self$tmle_params[[1]]$observed_likelihood$submodel_type(update_node) == "logistic") {  # transform to conditional mean before fitting
-            observed <- submodel_data$observed
-            submodel_data$initial <- ifelse(observed == 1, submodel_data$initial, 1-submodel_data$initial)
-          }
-        }
-      }
-
       if(self$one_dimensional){
         # Will break if not called by original training task
 
@@ -373,6 +346,11 @@ tmle3_Update_mediation <- R6Class(
           }
           if(is.function(delta_epsilon)) {
             delta_epsilon <- delta_epsilon(submodel_data$H)
+          }
+          # ZW: allow 0 delta_epsilon
+          if (delta_epsilon == 0) {
+            warning("delta_epsilon=0 for optim_delta_epsilon=T! delta_epsilon is set to 1E-8. ")
+            delta_epsilon <- 1E-8
           }
           delta_epsilon <- c(0,delta_epsilon)
 
@@ -481,25 +459,7 @@ tmle3_Update_mediation <- R6Class(
         drop_censored = FALSE
       )
 
-      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
-        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
-          if (likelihood$submodel_type(update_node) == "logistic") {  # transform to conditional mean
-            observed <- tmle_task$get_tmle_node(update_node)
-            submodel_data$initial <- ifelse(observed==1, submodel_data$initial, 1-submodel_data$initial)
-          }
-        }
-      }
-
       updated_likelihood <- self$apply_submodel(submodel_data, new_epsilon)
-
-      if (T %in% unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med")))) {
-        if (length(unique(unlist(lapply(self$tmle_params, function(x) inherits(x, "Param_med"))))) > 1) stop("Mixed types of targets. ") else {
-          if (likelihood$submodel_type(update_node) == "logistic") {  # transform back to density
-            observed <- tmle_task$get_tmle_node(update_node)
-            updated_likelihood <- ifelse(observed==1, updated_likelihood, 1-updated_likelihood)
-          }
-        }
-      }
 
       if (any(!is.finite(updated_likelihood))) {
         stop("Likelihood was updated to contain non-finite values.\n
@@ -512,6 +472,68 @@ tmle3_Update_mediation <- R6Class(
       )
 
       return(updated_likelihood)
+    },
+    apply_update_full = function(tmle_task, likelihood, fold_number, all_epsilon) {
+      update_nodes <- self$update_nodes
+      if (fold_number == "full") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd
+      } else if (fold_number == "validation") {
+        list_all_predicted_lkd <- likelihood$list_all_predicted_lkd_val
+      }
+
+      tmle_task <- likelihood$training_task
+      temp_node_names <- names(tmle_task$npsem)
+      obs_data <- tmle_task$data
+      obs_variable_names <- names(obs_data)
+
+      tmle_params <- self$tmle_params
+      intervention_nodes <- union(names(tmle_params[[1]]$intervention_list_treatment), names(tmle_params$intervention_list_control))
+      intervention_variables <- map_chr(tmle_task$npsem[intervention_nodes], ~.x$variables)
+      intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
+      intervention_levels_treat <- map_dbl(tmle_params[[1]]$intervention_list_treatment, ~.x$value %>% as.character %>% as.numeric)
+      intervention_levels_control <- map_dbl(tmle_params[[1]]$intervention_list_control, ~.x$value %>% as.character %>% as.numeric)
+
+      # apply update to all nodes
+      updated_likelihoods <- lapply(update_nodes, function(update_node) {
+        loc_node <- which(temp_node_names == update_node)
+
+        # this is where full H list gets updated
+        current_newH <- get_current_newH(loc_node,
+                                         tmle_task, obs_data,
+                                         intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                         list_all_predicted_lkd
+        )
+        observed <- list_all_predicted_lkd[[update_node]][[ tmle_task$npsem[[update_node]]$variables ]] %>% as.vector()
+        observed <- tmle_task$scale(observed, update_node)
+        initial <- list_all_predicted_lkd[[update_node]]$output
+        initial <- tmle_task$scale(initial, update_node)
+        initial <- bound(initial, 0.005)
+        submodel_data <- list(
+          observed = observed,
+          H = current_newH %>% as.matrix,
+          initial = initial
+        )
+        submodel_data_1 <- list(
+          observed = observed[observed == 1],
+          H = current_newH %>% as.matrix,
+          initial = initial[observed == 1]
+        )
+
+        epsilon <- all_epsilon[[update_node]]
+        updated_likelihood_1 <- self$apply_submodel(submodel_data_1, epsilon)
+        updated_likelihood <- submodel_data$initial
+        updated_likelihood[observed == 1] <- updated_likelihood_1
+        updated_likelihood[observed == 0] <- 1 - updated_likelihood_1  # list of probs are symmetric for now
+
+        # un-scale to handle bounded continuous
+        updated_likelihood <- tmle_task$unscale(
+          updated_likelihood,
+          update_node
+        )
+      })
+      names(updated_likelihoods) <- update_nodes
+
+      return(updated_likelihoods)
     },
     check_convergence = function(tmle_task, fold_number = "full") {
       estimates <- self$current_estimates
@@ -587,40 +609,6 @@ tmle3_Update_mediation <- R6Class(
       private$.current_estimates <- lapply(self$tmle_params, function(tmle_param) {
         tmle_param$estimates(tmle_task, update_fold)
       })
-
-      if(FALSE) {
-        clever_covariates <- lapply(self$tmle_params, function(tmle_param) {
-          tmle_param$clever_covariates(tmle_task, update_fold)})
-        IC <- lapply(clever_covariates, `[[`, "IC")
-        if(!is.null(IC[[1]])){
-          n <- length(unique(tmle_task$id))
-          IC_vars <- lapply(IC, function(IC) {
-            out <- lapply(self$update_nodes, function(node) {
-              weights <- tmle_task$get_regression_task(node)$weights
-              apply(IC[[node]] * weights,2, function(v) {var(rowSums(matrix(v, nrow = n, byrow = T)))})
-            } )
-            names(out) <- self$update_nodes
-            return(out)
-          })
-          private$.initial_variances <- IC_vars
-
-
-        } else {
-          n <- length(unique(tmle_task$id))
-          IC <- lapply(private$.current_estimates, `[[`, "IC")
-          IC_vars <- lapply(IC, function(IC) {
-            weights <- tmle_task$get_regression_task(node)$weights
-            IC_var <- apply(IC[[node]] * weights,2, function(v) {var(rowSums(matrix(v, nrow = n, byrow = T)))})
-            IC_var <- lapply(self$update_nodes, function(node) {IC_var})
-            names(IC_var) <- self$update_nodes
-            return(IC_var)
-          })
-          private$.initial_variances <- IC_vars
-        }
-      }
-
-
-      #private$.initial_variances <- lapply(private$.current_estimates, `[[`, "var_comps")
 
       for (steps in seq_len(maxit)) {
         self$update_step(likelihood, tmle_task, update_fold)

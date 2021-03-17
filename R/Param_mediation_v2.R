@@ -71,7 +71,7 @@ Param_medidation <- R6Class(
         } else {
           return(list_EIC)
         }
-      } else {  # note submodel_type; only calculate when i) no cached EIC, ii) forced to update after tlik is updated; or iii) not obs task
+      } else {  # note submodel_type; only calculate when i) no cached EIC, ii) forced to update after tlik is updated; or iii) not obs task, such as cf tasks
         rm(list_EIC)
 
         # load full_p list first
@@ -311,10 +311,8 @@ Param_medidation <- R6Class(
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
         if (fold_number == "full") {
-          private$.list_EIC <- list_EIC
           private$.result <- result
         } else if (fold_number == "validation") {
-          private$.list_EIC_val <- list_EIC
           private$.result_val <- result
         }
 

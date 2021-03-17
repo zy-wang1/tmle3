@@ -120,7 +120,7 @@ get_current_Q <- function(loc_node, which_Q,
     df_to_update <- temp_current <- list_all_predicted_lkd[[loc_node]] # decide input matrix; the last column might not be fully used
 
     # get Q current
-    {
+    if (ind_var <= length(obs_variable_names)) {  # Q_X, except for Q_R_tao+1
       data_temp <- df_to_update[1:(ind_var-1)]
       # generate all possible 0, 1 valued rlz; set A to 0 first; set y_tau to always 1;
       all_possible_rlz_1 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
@@ -147,12 +147,12 @@ get_current_Q <- function(loc_node, which_Q,
                                        }
                                        # for all non-A, non-0 variables, calculate the variable by rule
                                        # for Z's, use A = 0 values; outputs are predicted probs at each possible comb
-                                       loc_Z_need <- loc_Z[loc_Z > loc_node]  # only integrate out future variables
+                                       loc_Z_need <- loc_Z[loc_Z >= loc_node + which_Q]  # only integrate out future variables
                                        temp_list_0 <- lapply(loc_Z_need,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_0, list_all_predicted_lkd[[each_t]])$output
                                                              })
-                                       loc_other_needed <- loc_RLY[loc_RLY > loc_node]
+                                       loc_other_needed <- loc_RLY[loc_RLY >= loc_node + which_Q]
                                        temp_list_1 <- lapply(loc_other_needed,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_1, list_all_predicted_lkd[[each_t]])$output
@@ -162,6 +162,8 @@ get_current_Q <- function(loc_node, which_Q,
                                      })
       )
       Q_current <- left_join(data_temp, library_output)$output
+    } else {
+      Q_current <- df_to_update[, ind_var-1]  # Q_R_tao+1 is just the output
     }
 
     return(Q_current)
