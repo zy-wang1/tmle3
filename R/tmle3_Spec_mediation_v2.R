@@ -23,7 +23,7 @@ tmle3_Spec_mediation <- R6Class(
       if(is.null(if_drop_censored)) {
         tmle_task <- mediation_task(data, node_list, variable_types)
       } else {
-        if(if_drop_censored == T) tmle_task <- mediation_task_drop_censored(data, node_list, variable_types) else
+        if(if_drop_censored) tmle_task <- mediation_task_drop_censored(data, node_list, variable_types) else
           tmle_task <- mediation_task(data, node_list, variable_types)
       }
       return(tmle_task)
@@ -72,9 +72,9 @@ tmle3_Spec_mediation <- R6Class(
         })
         names(treatment) <- names(control) <- temp_names[loc_A]
         if (is.null(if_projection)) {
-          param <- Param_medidation$new(likelihood, treatment, control)
+          param <- Param_mediation$new(likelihood, treatment, control)
         } else if (!if_projection) {
-          param <- Param_medidation$new(likelihood, treatment, control)
+          param <- Param_mediation$new(likelihood, treatment, control)
         } else if (if_projection) {
           param <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
         } else stop("Error: if_projection needs to be either True or False/NULL. ")
@@ -92,7 +92,7 @@ tmle3_Spec_mediation <- R6Class(
       # ZW todo: in future can be dynamic
       A_levels <- tmle_task$npsem[[ temp_names[loc_A_E[1]] ]]$variable_type$levels
 
-      tmle_params <-lapply(options, function(option) {
+      tmle_params <- lapply(options, function(option) {
         if (option == "tc") {
           treatment_value <- self$options$treatment_level
           control_value <- self$options$control_level
@@ -104,10 +104,8 @@ tmle3_Spec_mediation <- R6Class(
           control_value <- self$options$control_level
         }  # decide the target of inference
         if (!is.null(A_levels)) {
-          treatment_value <- treatment_value
-          # factor(treatment_value, levels = A_levels)
-          control_value <- control_value
-          # factor(control_value, levels = A_levels)
+          treatment_value <- factor(treatment_value, levels = A_levels)
+          control_value <- factor(control_value, levels = A_levels)
         }
         # list of intervention nodes as LF_static objects
         treatment <- lapply(temp_names[loc_A_E], function(eachA) {
@@ -119,8 +117,10 @@ tmle3_Spec_mediation <- R6Class(
         names(treatment) <- names(control) <- temp_names[loc_A_E]
         if (is.null(if_projection)) {
           param <- Param_med_survival$new(likelihood, treatment, control, outcome_node = last(temp_names))
-        } else if (if_projection) {
+        } else if (!if_projection) {
           param <- Param_middle_projection_survival$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
+        } else if (if_projection) {
+          param <- Param_mediation_projection_survival$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
         }
         return(param)
       })

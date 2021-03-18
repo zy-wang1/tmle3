@@ -40,7 +40,7 @@
 #'     }
 #' }
 #' @export
-Param_medidation <- R6Class(
+Param_mediation <- R6Class(
   classname = "Param_mediation",
   portable = TRUE,
   class = TRUE,
@@ -395,52 +395,69 @@ Param_mediation_survival <- R6Class(
   class = TRUE,
   inherit = Param_base,
   public = list(
-    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y") {
-      super$initialize(observed_likelihood, list(), outcome_node = outcome_node)
+    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control) {
+      # outcome_node is used to check self$supports_outcome_censoring; not checked for now
+      super$initialize(observed_likelihood, list())
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
       observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
-    clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F, node = NULL, submodel_type = "logistic") {
+    clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F, node = NULL, submodel_type = "EIC") {
       if (is.null(tmle_task)) {  # calculate for obs data task if not specified
         tmle_task <- self$observed_likelihood$training_task
       }
       intervention_nodes <- union(names(self$intervention_list_treatment), names(self$intervention_list_control))
 
-
       if (fold_number == "full") {  # tmle
-        list_newH <- ifelse_vec(submodel_type == "logistic", private$.list_newH, private$.list_newH_EIC)
+        list_EIC <- private$.list_EIC
       } else if (fold_number == "validation") {  # cvtmle
-        list_newH <- ifelse_vec(submodel_type == "logistic", private$.list_newH_val, private$.list_newH_EIC_val)
+        list_EIC <- private$.list_EIC_val
       }  # load cached obs task clever covariates in case its for convergence check
-      if (!is.null(list_newH) & update == F & identical(tmle_task, self$observed_likelihood$training_task)) {  # for faster convergence check
+
+      if (!is.null(list_EIC) & update == F & identical(tmle_task, self$observed_likelihood$training_task)) {  # for faster convergence check
         if (!is.null(node)) {  # return partial list of covariates if requested
-          return(list_newH[node])
+          return(list_EIC[node])
         } else {
-          # list_newH <- c(list_newH, self$clever_covariates(fold_number = fold_number, submodel_type = "EIC"))  # append the IC to clever covariates
-          # names(list_newH)[length(list_newH)] <- "IC"
-          return(list_newH)
+          return(list_EIC)
         }
-      } else {  # note submodel_type; only calculate when i) no cached newH, ii) forced to update after tlik is updated; or iii) not obs task
-        rm(list_newH)
+      } else {  # note submodel_type; only calculate when i) no cached EIC, ii) forced to update after tlik is updated; or iii) not obs task, such as cf tasks
+        rm(list_EIC)
 
         # load full_p list first
         full_task <- self$observed_likelihood$training_task
         full_node_names <- names(full_task$npsem)
-        full_data <- full_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))  # exactly the obs data
+        full_node_names <- full_node_names[-grep("delta_", full_node_names)]  # remove delta nodes for wide format fitting
+        full_data <- full_task$data %>% as.data.frame %>% dplyr::select(-c(id, t)) %>% dplyr::select(!starts_with("delta"))  # exactly the obs data
         full_variable_names <- colnames(full_data)
         list_all_predicted_lkd <- lapply(1:length(full_node_names), function(loc_node) {
           if (loc_node > 1) {
-            # currently only support univariate node for t>0
-            current_variable <- full_task$npsem[[loc_node]]$variables
-            temp_input <- expand_values(variables = full_variable_names[1:which(full_variable_names == current_variable)])  # all possible inputs
-            temp_task <- tmle3_Task$new(temp_input, full_task$npsem[1:loc_node])
+            current_variable <- tmle_task$npsem[[loc_node]]$variables
+            loc_impute <- grep("Y_|A_C_", full_node_names)  # remain alive and uncensored before current variable
+            loc_impute <- loc_impute[loc_impute < loc_node]
+            if (length(loc_impute) == 0) {  # no subject can drop out/die yet
+              temp_input <- expand_values(variables = full_variable_names[1:which(full_variable_names == current_variable)])  # all possible inputs
+            } else {
+              temp_input <- expand_values(variables = full_variable_names[1:which(full_variable_names == current_variable)],
+                                          rule_variables = sapply(loc_impute, function(s) tmle_task$npsem[[s]]$variables),
+                                          rule_values = rep(1, length(loc_impute))
+              )  # all possible inputs
+            }
+            delta_vars <- names(sapply(paste0("delta_", full_node_names[1:loc_node]), function(x) grep(x, names(tmle_task$npsem))) %>% compact %>% unlist)
+            if (length(delta_vars) > 0) {
+              temp_input <- cbind(temp_input, matrix(T, 1, length(delta_vars)))
+              colnames(temp_input)[(ncol(temp_input) - length(delta_vars) + 1):ncol(temp_input)] <- delta_vars
+            }
+
+            temp_task <- tmle3_Task$new(temp_input, tmle_task$npsem[c(1:loc_node,
+                                                                      sapply(paste0("delta_", full_node_names[1:loc_node]), function(x) grep(x, names(tmle_task$npsem))) %>% compact %>% unlist
+            )])
             temp_target_node <- intersect(self$update_nodes, full_node_names[loc_node])
             if (length(temp_target_node) == 1) {
-              setattr(temp_task, "target_nodes", full_node_names[loc_node])
+              # for each short task, only the last node (if it is an update_node) needs to be updated
+              setattr(temp_task, "target_nodes", temp_target_node)
               temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = full_node_names[loc_node], fold_number)  # corresponding outputs
             } else {
-              setattr(temp_task, "target_nodes", "no_update")
+              # A nodes won't get updated
               temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = full_node_names[loc_node], fold_number)  # corresponding outputs
             }
             data.frame(temp_input, output = temp_output) %>% return
@@ -456,11 +473,13 @@ Param_mediation_survival <- R6Class(
           cf_task_control <- self$cf_likelihood_control$enumerate_cf_tasks(tmle_task)[[1]]
 
           temp_node_names <- names(tmle_task$npsem)
-          loc_A <- grep("A", temp_node_names)
-          loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-          loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
+          temp_node_names <- temp_node_names[-grep("delta_", temp_node_names)]  # remove delta nodes for wide format fitting
 
-          obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))  # note this is compatible if tmle_task is a cf task
+          loc_A_E <- grep("A_E", temp_node_names)
+          loc_Z <- which(sapply(temp_node_names, function(s) paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") == "Z"))
+          loc_RLY <- which(sapply(temp_node_names, function(s) !(paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") %in% c("A_C", "A_E", "A", "Z")) & tail(strsplit(s, "_")[[1]], 1) != 0))
+
+          obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t)) %>% dplyr::select(!starts_with("delta"))  # note this is compatible if tmle_task is a cf task
           obs_variable_names <- colnames(obs_data)
           # ZW todo: to handle long format and wide format
 
@@ -471,63 +490,45 @@ Param_mediation_survival <- R6Class(
           names(intervention_levels_treat) <- names(self$intervention_list_treatment)
           names(intervention_levels_control) <- names(self$intervention_list_control)
 
-          list_H <- get_obs_H(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
-                              cf_task_treatment, cf_task_control,
-                              intervention_variables, intervention_levels_treat, intervention_levels_control,
-                              fold_number)
-          list_Q_1 <- get_obs_Q(tmle_task, obs_data, list_H,
-                                intervention_variables, intervention_levels_treat, intervention_levels_control,
-                                list_all_predicted_lkd,  # val version decided above for fold_number == "validation"
-                                lt = 1)
-          list_Q_0 <- get_obs_Q(tmle_task, obs_data, list_H,
-                                intervention_variables, intervention_levels_treat, intervention_levels_control,
-                                list_all_predicted_lkd,
-                                lt = 0)
-
-          list_newH <- list()
-          for (loc_node in 1:length(list_H)) {
-            if(!is.null(list_H[[loc_node]])) {  # for density update, change the sign of some clever covariates
-              temp_vec <- list_H[[loc_node]] * (list_Q_1[[loc_node]] - list_Q_0[[loc_node]])
-              list_newH[[loc_node]] <- temp_vec
+          list_H <- get_obs_H_list(tmle_task, obs_data, current_likelihood = self$observed_likelihood,
+                                   cf_task_treatment, cf_task_control,
+                                   intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                   fold_number)
+          list_Q <- get_obs_Q_list(tmle_task, obs_data,
+                                   intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                   list_all_predicted_lkd  # val version decided above for fold_number == "validation"
+          )
+          list_Q[[length(list_Q)+1]] <- tmle_task$get_tmle_node(length(list_Q))
+          list_delta_Q <- lapply(1:length(list_H), function(i) {
+            if (is.null(list_Q[[i]]))
+              return(NULL)
+            else {
+              temp_i_plus <- first(!sapply(list_Q[(i+1):length(list_Q)], is.null))  # search for the first non-null loc after i
+              return(list_Q[[i+temp_i_plus]] - list_Q[[i]])
             }
-          }
-          names(list_newH) <- temp_node_names
+          })
+          list_EIC <- lapply(1:length(list_H), function(i) {
+            if (is.null(list_H)) NULL else
+              list_H[[i]]*list_delta_Q[[i]]
+          })
+          names(list_EIC) <- temp_node_names
 
-          # calculate EIC components
-          list_D <- list()
-          for (loc_node in 1:length(list_newH)) {
-            if(!is.null(list_newH[[loc_node]])) {
-              # ZW todo: for discretized variables
-              current_ind <- (obs_data[[tmle_task$npsem[[loc_node]]$variables]] == 1)*1
-              temp_vec <- list_newH[[loc_node]] %>% as.vector
-              temp_p <- self$observed_likelihood$get_likelihoods(tmle_task, temp_node_names[loc_node], fold_number)
-              # if (loc_node %in% loc_Z) temp_p <- self$observed_likelihood$get_likelihoods(cf_task_control, temp_node_names[loc_node], fold_number) else
-              #   temp_p <- self$observed_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[loc_node], fold_number)
-              temp_p <- ifelse(current_ind == 1, temp_p, 1 - temp_p)  # transform density to conditional mean
-              list_D[[loc_node]] <- (current_ind - temp_p) * temp_vec
-            }
-          }
-          # list_D[[1]] <- vec_est - psi
-          names(list_D) <- names(list_newH)
-
-          if (submodel_type != "logistic") {  # get EIC as clever covariates for EIC submodels
-            list_newH <- list_D  # EIC is the clever covariates for EIC submodels
-          }
-
-          list_newH[[length(list_newH) + 1]] <- do.call(cbind, list_D)
-          names(list_newH)[length(list_newH)] <- "IC"  # to use in by dimension convergence
+          # last column might be needed for some tmle update functions
+          list_EIC[[length(list_EIC) + 1]] <- do.call(cbind, list_EIC)
+          names(list_EIC)[length(list_EIC)] <- "IC"  # to use in by dimension convergence
 
           if (identical(tmle_task, self$observed_likelihood$training_task)) {  # cache for obs task
             if (fold_number == "full") {
-              if (submodel_type == "logistic") private$.list_newH <- list_newH else private$.list_newH_EIC <- list_newH
+              private$.list_EIC <- list_EIC
             } else if (fold_number == "validation") {
-              if (submodel_type == "logistic") private$.list_newH_val <- list_newH else private$.list_newH_EIC_val <- list_newH
+              private$.list_EIC_val <- list_EIC
             }
           }
 
           if (!is.null(node)) {  # return partial list of covariates if requested
-            return(list_newH[node])
-          } else return(list_newH)
+            return(list_EIC[node])
+          } else
+            return(list_EIC)
         } else {  # for library tasks; it's only needed in tlik updates, with single node
           if (is.null(node)) stop("Please specify single update node for library tasks")
 
@@ -543,23 +544,28 @@ Param_mediation_survival <- R6Class(
           names(intervention_levels_treat) <- names(self$intervention_list_treatment)
           names(intervention_levels_control) <- names(self$intervention_list_control)
 
-          current_newH <- get_current_newH(loc_node,
-                                           tmle_task, obs_data,
-                                           intervention_variables, intervention_levels_treat, intervention_levels_control,
-                                           list_all_predicted_lkd  # this is decided above by fold_number
+          current_H <- get_current_H(loc_node,
+                                     tmle_task, obs_variable_names,
+                                     intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                     list_all_predicted_lkd  # this is decided above by fold_number
           )  # this is what we need for logistic submodel
+          current_Q_next <- get_current_Q(loc_node, which_Q = 1,
+                                          tmle_task, obs_variable_names,
+                                          intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                          list_all_predicted_lkd  # this is decided above by fold_number
+          )
+          current_Q <- get_current_Q(loc_node, which_Q = 0,
+                                     tmle_task, obs_variable_names,
+                                     intervention_variables, intervention_levels_treat, intervention_levels_control,
+                                     list_all_predicted_lkd  # this is decided above by fold_number
+          )
+          current_delta_Q <- current_Q_next - current_Q
+          current_EIC <- current_H*current_delta_Q
 
-          if (submodel_type != "logistic") {  # for EIC, add needed X - E(X) term
-            observed <- tmle_task_backup$get_tmle_node(loc_node)  # get X
-            EX <- list_all_predicted_lkd[[node]]$output  # p(X)
-            EX <- ifelse(observed == 1, EX, 1-EX)  # transfrom p(X) to E(X) as its needed in D*
-            current_newH <- (observed - EX) * current_newH  # it can be raw observed X, since it's a density update
-          }
+          current_EIC <- list(current_EIC)
+          names(current_EIC) <- node
 
-          current_newH <- list(current_newH)
-          names(current_newH) <- node
-
-          return(current_newH)
+          return(current_EIC)
         }
 
       }
@@ -577,7 +583,7 @@ Param_mediation_survival <- R6Class(
       temp_node_names <- names(tmle_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-      loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+      loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
 
       obs_data <- tmle_task$data %>% as.data.frame %>% dplyr::select(-c(id, t))
@@ -585,10 +591,10 @@ Param_mediation_survival <- R6Class(
       # ZW todo: to handle long format and wide format
 
       if (fold_number == "full") {
-        list_D <- private$.list_D
+        list_EIC <- private$.list_EIC
         result <- private$.result
       } else if (fold_number == "validation") {
-        list_D <- private$.list_D_val
+        list_EIC <- private$.list_EIC_val
         result <- private$.result_val
       }
 
@@ -617,7 +623,7 @@ Param_mediation_survival <- R6Class(
       names(list_all_predicted_lkd) <- full_node_names
 
       # make sure we force update this after each updating step; this helps speed up updater$check_convergence
-      if (!is.null(list_D) & !is.null(result) & update == F) {
+      if (!is.null(list_EIC) & !is.null(result) & update == F) {
         return(result)
       } else {
         intervention_variables <- map_chr(tmle_task$npsem[intervention_nodes], ~.x$variables)
@@ -660,23 +666,21 @@ Param_mediation_survival <- R6Class(
         vec_est <- left_join(obs_data[, tmle_task$npsem[[1]]$variables], library_L0)$output
         psi <- mean(vec_est)
 
-        list_D <- self$clever_covariates(tmle_task, fold_number, submodel_type = "EIC")
-        list_D[[1]] <- vec_est - psi
-        list_D <- list_D[-which(names(list_D) == "IC")]
+        list_EIC <- self$clever_covariates(tmle_task, fold_number, submodel_type = "EIC")
+        list_EIC[[1]] <- vec_est - psi
+        list_EIC <- list_EIC[-which(names(list_EIC) == "IC")]
 
-        vec_D <- list_D %>% compact %>% pmap_dbl(sum)
+        vec_D <- list_EIC %>% compact %>% pmap_dbl(sum)
         IC <- vec_D
 
         result <- list(psi = psi, IC = IC
-                       # , full_IC = list_D
+                       # , full_IC = list_EIC
         )
 
         # these are cached; unless likelihood is updated, or we force it to update, they shouldn't be changed
         if (fold_number == "full") {
-          private$.list_D <- list_D
           private$.result <- result
         } else if (fold_number == "validation") {
-          private$.list_D_val <- list_D
           private$.result_val <- result
         }
 
@@ -712,17 +716,11 @@ Param_mediation_survival <- R6Class(
       # nodes_to_update <- nodes_to_update[-length(nodes_to_update)]
       return(nodes_to_update)
     },
-    list_newH = function() {
-      return(private$.list_newH)
+    list_EIC = function() {
+      return(private$.list_EIC)
     },
-    list_newH_val = function() {
-      return(private$.list_newH_val)
-    },
-    list_newH_EIC = function() {
-      return(private$.list_newH_EIC)
-    },
-    list_newH_EIC_val = function() {
-      return(private$.list_newH_EIC_val)
+    list_EIC_val = function() {
+      return(private$.list_EIC_val)
     }
   ),
   private = list(
@@ -797,7 +795,7 @@ Param_mediation_projection <- R6Class(
       temp_node_names <- names(observed_likelihood$training_task$npsem)
       loc_A <- grep("A", temp_node_names)
       loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-      loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+      loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
       tau <- last(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2]))
 
@@ -1120,7 +1118,7 @@ Param_mediation_projection_survival <- R6Class(
   class = TRUE,
   inherit = Param_base,
   public = list(
-    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, outcome_node = "Y", static_likelihood = NULL, n_resampling = NULL) {
+    initialize = function(observed_likelihood, intervention_list_treatment, intervention_list_control, static_likelihood = NULL, n_resampling = NULL) {
       if(inherits(observed_likelihood, "Targeted_Likelihood")){
         fold_number <- observed_likelihood$updater$update_fold
       } else {
@@ -1130,8 +1128,8 @@ Param_mediation_projection_survival <- R6Class(
       temp_node_names <- names(observed_likelihood$training_task$npsem)
       temp_node_names <- temp_node_names[-grep("delta_", temp_node_names)]  # remove delta nodes for wide format fitting
       loc_A_E <- grep("A_E", temp_node_names)
-      loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-      loc_RLY <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] %in% c("R", "L", "Y") & strsplit(s, "_")[[1]][2] != 0))
+      loc_Z <- which(sapply(temp_node_names, function(s) paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") == "Z"))
+      loc_RLY <- which(sapply(temp_node_names, function(s) !(paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") %in% c("A_C", "A_E", "Z")) & tail(strsplit(s, "_")[[1]], 1) != 0))
       if_not_0 <- sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2] != 0)
       tau <- as.numeric(last(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][2])))
 
@@ -1143,7 +1141,7 @@ Param_mediation_projection_survival <- R6Class(
       private$.update_nodes <- c(Z_nodes, RLY_nodes)
 
       private$.supports_outcome_censoring <- T
-      super$initialize(observed_likelihood, list(), outcome_node = outcome_node)
+      super$initialize(observed_likelihood, list())
 
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)

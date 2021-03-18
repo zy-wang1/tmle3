@@ -77,7 +77,7 @@ get_obs_H_full_survival <- function(tmle_task, obs_data, current_likelihood,
         obs_data[[tmle_task$npsem[[k]]$variables]] == intervention_levels_control[which(loc_A_needed == k)]
       }), 1, prod) == 1
     part_A <- lapply(loc_A_needed, function(k) {
-      temp_p_A_E <- current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)  # A_E | A_C=1
+      temp_p_A_E <- current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number)  # A_E | A_C=1
       if (!is.null(tmle_task$npsem[[k]]$censoring_node$variables)) {  # if there is missingness in A_E
         temp_full <- if_A_E_observed <- tmle_task$get_tmle_node(tmle_task$npsem[[k]]$censoring_node$variables)
         temp_full[if_A_E_observed] <- temp_p_A_E
