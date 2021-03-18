@@ -116,9 +116,9 @@ tmle3_Spec_mediation <- R6Class(
         })
         names(treatment) <- names(control) <- temp_names[loc_A_E]
         if (is.null(if_projection)) {
-          param <- Param_med_survival$new(likelihood, treatment, control, outcome_node = last(temp_names))
+          param <- Param_mediation_survival$new(likelihood, treatment, control)
         } else if (!if_projection) {
-          param <- Param_middle_projection_survival$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
+          param <- Param_mediation_survival$new(likelihood, treatment, control)
         } else if (if_projection) {
           param <- Param_mediation_projection_survival$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
         }

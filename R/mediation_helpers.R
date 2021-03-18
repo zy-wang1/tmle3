@@ -277,24 +277,57 @@ get_obs_Q_list <- function(tmle_task, obs_data,
   # decide validation or full by list_all_predicted_lkd
   obs_variable_names <- colnames(obs_data)
   temp_node_names <- names(tmle_task$npsem)
-  loc_A <- grep("A", temp_node_names)
-  loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-  loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
+  loc_delta <- grep("delta_", temp_node_names)
+  temp_node_names <- temp_node_names[-grep("delta_", temp_node_names)]  # remove delta nodes for wide format fitting
+
+  if (length(loc_delta) == 0) {  # no missingness node for all nodes
+    loc_A <- grep("A", sapply(temp_node_names, function(x) substr(x, 1, 1)))
+    loc_A_C <- loc_var_A_C <- NULL
+  } else {
+    loc_A <- grep("A_E", temp_node_names)
+    loc_A_C <- grep("A_C", temp_node_names)
+    loc_var_A_C <- sapply(loc_A_C, function(x) which(obs_variable_names == tmle_task$npsem[[x]]$variables))
+  }
+  loc_Z <- which(sapply(temp_node_names, function(s) paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") == "Z"))
+  loc_RLY <- which(sapply(temp_node_names, function(s) !(paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") %in% c("A_C", "A_E", "A", "Z")) & tail(strsplit(s, "_")[[1]], 1) != 0))
   intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
+
   list_Q <- list()
   for (loc_node in 1:length(temp_node_names)) {
     if (loc_node %in% c(loc_Z, loc_RLY)) {
       # generate all possible 0, 1 valued rlz; set A to 0 first; set y_tau to always 1;
       loc_current_var <- which(obs_variable_names == tmle_task$npsem[[loc_node]]$variables)
-      all_possible_RZLY_1 <- expand_values(obs_variable_names, to_drop = c(1:(loc_current_var-1) ),
-                                           rule_variables = c(last(obs_variable_names), intervention_variables),
-                                           rule_values = c(1, intervention_levels_treat))
-      all_possible_RZLY_0 <- expand_values(obs_variable_names, to_drop = c(1:(loc_current_var-1) ),
-                                           rule_variables = c(last(obs_variable_names), intervention_variables),
-                                           rule_values = c(1, intervention_levels_control))
+
+      if (length(loc_delta) == 0) {  # no missingness/censoring
+        loc_var_last_not_integrated <- loc_current_var-1
+        all_possible_RZLY_1 <- expand_values(obs_variable_names, to_drop = c(1:(loc_var_last_not_integrated) ),
+                                             rule_variables = c(last(obs_variable_names), intervention_variables),
+                                             rule_values = c(1, intervention_levels_treat))
+        all_possible_RZLY_0 <- expand_values(obs_variable_names, to_drop = c(1:(loc_var_last_not_integrated) ),
+                                             rule_variables = c(last(obs_variable_names), intervention_variables),
+                                             rule_values = c(1, intervention_levels_control))
+      } else {  # missingness/right-censoring
+        loc_impute <- grep("Y_|A_C_", temp_node_names)  # in integral, Y and A_C always 1
+        loc_previous <- c(loc_Z, loc_RLY)[c(loc_Z, loc_RLY) < loc_node]
+        if (length(loc_previous) == 0) {
+          loc_var_last_not_integrated <- loc_current_var - 1
+        } else {
+          loc_var_last_not_integrated <- which(obs_variable_names == tmle_task$npsem[[max(loc_previous)]]$variables)
+        }
+        all_possible_RZLY_1 <- expand_values(obs_variable_names, to_drop = c(1:(loc_var_last_not_integrated) ),
+                                             rule_variables = c(last(obs_variable_names), intervention_variables, sapply(loc_impute, function(s) tmle_task$npsem[[s]]$variables)),
+                                             rule_values = c(1, intervention_levels_treat, rep(1, length(loc_impute))))
+        all_possible_RZLY_0 <- expand_values(obs_variable_names, to_drop = c(1:(loc_var_last_not_integrated) ),
+                                             rule_variables = c(last(obs_variable_names), intervention_variables, sapply(loc_impute, function(s) tmle_task$npsem[[s]]$variables)),
+                                             rule_values = c(1, intervention_levels_control, rep(1, length(loc_impute))))
+      }
 
       # for each observed L_0 vector, generate all needed combinations, one version for A = 1, one version for A = 0
-      unique_input <- obs_data[, 1:(loc_current_var-1)] %>% unique
+      unique_input <- obs_data[, 1:(loc_var_last_not_integrated)] %>% unique
+      if (!is.null(loc_var_A_C)) {
+        loc_var_A_C_used <- loc_var_A_C[loc_var_A_C < loc_var_last_not_integrated]
+        unique_input[, loc_var_A_C_used] <- 1
+      }
       library_output <- data.frame(unique_input, output =
                                      map_dbl(1:nrow(unique_input), function(which_row) {
                                        # probs in the integrals, A=1 or A=0 is inserted
@@ -306,8 +339,7 @@ get_obs_Q_list <- function(tmle_task, obs_data,
                                        }
                                        # for all non-A, non-0 variables, calculate the variable by rule
                                        # for Z's, use A = 0 values; outputs are predicted probs at each possible comb
-                                       loc_Z_needed <- loc_Z[loc_Z >= loc_node]  # only product children variables
-                                       # temp_list_0 <- lapply(loc_Z_needed,
+                                       loc_Z_needed <- loc_Z[loc_Z >= loc_node]  # integrate out current variable
                                        temp_list_0 <- lapply(loc_Z_needed,
                                                              function(each_t) {
                                                                left_join(temp_all_comb_0, list_all_predicted_lkd[[each_t]])$output
@@ -321,7 +353,9 @@ get_obs_Q_list <- function(tmle_task, obs_data,
                                        pmap_dbl(temp_list, prod) %>% sum %>% return
                                      })
       )
-      list_Q[[loc_node]] <- left_join(obs_data[, 1:(loc_current_var-1)], library_output)$output
+      temp_vec <- left_join(obs_data[, 1:(loc_current_var-1)], library_output)$output
+      temp_vec <- temp_vec[!is.na(temp_vec)]
+      list_Q[[loc_node]] <- temp_vec
     }
   }
   return(list_Q)
@@ -382,7 +416,7 @@ get_obs_H_list <- function(tmle_task, obs_data, current_likelihood,
       }
     }) %>% pmap_dbl(prod)  # this is the likelihood of being 1
     part_Z <- lapply(loc_Z_needed, function(k) {
-      current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) /
+      temp_p <- current_likelihood$get_likelihoods(cf_task_control, temp_node_names[k], fold_number) /
         current_likelihood$get_likelihoods(cf_task_treatment, temp_node_names[k], fold_number)
       if (!is.null(tmle_task$npsem[[k]]$censoring_node$variables)) {  # if there is missingness
         temp_full <- if_observed <- tmle_task$get_tmle_node(tmle_task$npsem[[k]]$censoring_node$variables)

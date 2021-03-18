@@ -68,6 +68,24 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
 )
 
 
+# no update, analytic EIC
+{
+  tlik <- initial_likelihood
+  tmle_params <- mediation_spec$make_params_survival(tmle_task, tlik, options = list("tc"))
+  suppressMessages(
+    nontargeting_re <- tmle_params_no_re[[1]]$estimates(tmle_task)
+  )
+  temp_IC <- nontargeting_re$IC
+  var_D <- var(temp_IC)
+  n <- length(temp_IC)
+  se <- sqrt(var_D / n)
+  CI2_re <- nontargeting_re$psi + 1.96 * se
+  CI1_re <- nontargeting_re$psi - 1.96 * se
+}
+
+
+
+
 # no update
 {
   tlik <- initial_likelihood

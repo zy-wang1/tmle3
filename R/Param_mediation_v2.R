@@ -400,7 +400,7 @@ Param_mediation_survival <- R6Class(
       super$initialize(observed_likelihood, list())
       private$.cf_likelihood_treatment <- CF_Likelihood$new(observed_likelihood, intervention_list_treatment)
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
-      observed_likelihood$get_likelihoods(observed_likelihood$training_task)
+      # observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
     clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F, node = NULL, submodel_type = "EIC") {
       if (is.null(tmle_task)) {  # calculate for obs data task if not specified
@@ -460,7 +460,7 @@ Param_mediation_survival <- R6Class(
               # A nodes won't get updated
               temp_output <- self$observed_likelihood$get_likelihood(temp_task, node = full_node_names[loc_node], fold_number)  # corresponding outputs
             }
-            data.frame(temp_input, output = temp_output) %>% return
+            data.frame(temp_input[1:which(obs_variable_names == current_variable)], output = temp_output) %>% return
           }
         })
         names(list_all_predicted_lkd) <- full_node_names
@@ -498,7 +498,9 @@ Param_mediation_survival <- R6Class(
                                    intervention_variables, intervention_levels_treat, intervention_levels_control,
                                    list_all_predicted_lkd  # val version decided above for fold_number == "validation"
           )
-          list_Q[[length(list_Q)+1]] <- tmle_task$get_tmle_node(length(list_Q))
+          temp_vec <- tmle_task$get_tmle_node(length(list_Q))
+          temp_vec <- temp_vec[!is.na(temp_vec)]
+          list_Q[[length(list_Q)+1]] <- temp_vec
           list_delta_Q <- lapply(1:length(list_H), function(i) {
             if (is.null(list_Q[[i]]))
               return(NULL)
