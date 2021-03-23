@@ -223,7 +223,7 @@ tmle3_Update <- R6Class(
       #   }
 
       observed <- tmle_task$get_tmle_node(update_node)
-      if (self$tmle_params[[1]]$type == "middle_survival") {
+      if (self$tmle_params[[1]]$type %in% c("middle_survival", "mediation_survival")) {
         observed <- observed[!is.na(observed)]
       }
 
@@ -276,7 +276,7 @@ tmle3_Update <- R6Class(
 
 
 
-      if (drop_censored & !(self$tmle_params[[1]]$type == "middle_survival")) {
+      if (drop_censored & !(self$tmle_params[[1]]$type %in% c("middle_survival", "mediation_survival"))) {
         censoring_node <- tmle_task$npsem[[update_node]]$censoring_node$name
         if (!is.null(censoring_node)) {
           observed_node <- tmle_task$get_tmle_node(censoring_node)
@@ -567,18 +567,18 @@ tmle3_Update <- R6Class(
         cat(sprintf("max(abs(ED)): %e\n", max(ED_criterion)))
       }
 
-      full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
-      if (!is.null(full_IC)) {
-        temp <- data.frame(current = full_IC %>% colMeans,
-                           threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
-        )
-        if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
-      } else {
-        if_conv_by_dim <- F
-      }
+      # full_IC <- self$tmle_params[[1]]$clever_covariates()$IC
+      # if (!is.null(full_IC)) {
+      #   temp <- data.frame(current = full_IC %>% colMeans,
+      #                      threshold = sqrt(apply(full_IC, 2, var)/n)/log(n)
+      #   )
+      #   if_conv_by_dim <- all(abs(temp[, 1]) < temp[, 2])
+      # } else {
+      #   if_conv_by_dim <- F
+      # }
 
       return(all(ED_criterion <= ED_threshold)
-             | if_conv_by_dim
+             # | if_conv_by_dim
              )
     },
     update_best = function(likelihood) {

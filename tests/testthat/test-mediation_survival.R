@@ -27,7 +27,7 @@ truth <- ((data_truth[[timepoint + 1]]$Y) %>% sum(na.rm = T)) / B  # prob of sur
 
 
 sample_size <- 400
-set.seed(1234)
+set.seed(123)
 data_sim <- generate_Zheng_data_survival(sample_size = sample_size, tau = timepoint, if_LY_misspec = if_LY_misspec, if_A_misspec = if_A_misspec)
 data_wide <- data.frame(data_sim)
 
@@ -73,20 +73,61 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
   tlik <- initial_likelihood
   tmle_params <- mediation_spec$make_params_survival(tmle_task, tlik, options = list("tc"))
   suppressMessages(
-    nontargeting_re <- tmle_params_no_re[[1]]$estimates(tmle_task)
+    nontargeting_analytic <- tmle_params[[1]]$estimates(tmle_task)
   )
-  temp_IC <- nontargeting_re$IC
+  temp_IC <- nontargeting_analytic$IC
   var_D <- var(temp_IC)
   n <- length(temp_IC)
   se <- sqrt(var_D / n)
-  CI2_re <- nontargeting_re$psi + 1.96 * se
-  CI1_re <- nontargeting_re$psi - 1.96 * se
+  CI2_no_an <- nontargeting_analytic$psi + 1.96 * se
+  CI1_no_an <- nontargeting_analytic$psi - 1.96 * se
 }
 
+# onestep update, analytic EIC
+{
+  # test update
+  n_subject <- nrow(tmle_task$data)
+  tlik <- Targeted_Likelihood$new(initial_likelihood,
+                                  submodel_type_by_node = "EIC" ,
+                                  updater = list(convergence_type = "scaled_var",
+                                                 constrain_step = T,
+                                                 optim_delta_epsilon = T,  # fixed small step_size
+                                                 one_dimensional=F,
+                                                 delta_epsilon=function(x) {
+                                                   ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/n_subject)/log(n_subject),
+                                                          0,
+                                                          ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
+                                                   )
+                                                 },
+                                                 maxit=100
+                                                 ,
+                                                 cvtmle=F
+                                  ))
+  tmle_params <- mediation_spec$make_params_survival(tmle_task, tlik)
+  ic_0 <- tmle_params[[1]]$clever_covariates()$"IC" %>% colMeans()
+  ic_0
+  suppressMessages(
+    tlik$updater$update(tlik, tmle_task)
+  )
+  ic_1 <- tmle_params[[1]]$clever_covariates()$"IC" %>% colMeans()
+  ic_1
+  suppressWarnings(suppressMessages(
+    new_est <- tmle_params[[1]]$estimates()$psi
+  ))
+  new_est
 
+  onestep_an <- tmle_params[[1]]$estimates()
+  onestep_an_est <- onestep_an$psi
+  temp_IC <- onestep_an$IC
+  var_D <- var(temp_IC)
+  n <- length(temp_IC)
+  se <- sqrt(var_D / n)
+  CI2_onestep_an <- onestep_an_est + 1.96 * se
+  CI1_onestep_an <- onestep_an_est - 1.96 * se
 
+}
 
-# no update
+# no update, projected EIC
 {
   tlik <- initial_likelihood
   tmle_params_no_re <- mediation_spec$make_params_survival(tmle_task, tlik, options = list("tc")
@@ -105,12 +146,11 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
   CI1_re <- nontargeting_re$psi - 1.96 * se
 }
 
-
-# projection param, resampling, EIC update
+# onestep update, projected EIC
 {
   updater <- tmle3_Update$new(convergence_type = "scaled_var",
                               constrain_step = T,
-                              optim_delta_epsilon = F,
+                              optim_delta_epsilon = T,
                               one_dimensional=F,
                               delta_epsilon=function(x) {
                                 ifelse(abs(sum(x %>% as.vector)/tmle_task$nrow) <
@@ -121,13 +161,13 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
                                        ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
                                 )
                               },
-                              maxit=10
+                              maxit=100
                               ,
                               cvtmle=F)
   tlik <- Targeted_Likelihood$new(initial_likelihood,
                                   submodel_type_by_node = "EIC" ,
                                   updater = updater)
-  tmle_params <- med_spec$make_params_survival(tmle_task, tlik, options = list("tc")
+  tmle_params <- mediation_spec$make_params_survival(tmle_task, tlik, options = list("tc")
                                                , static_likelihood = initial_likelihood,
                                                if_projection = T
                                                , n_resampling = 50000
@@ -150,60 +190,8 @@ initial_likelihood <- mediation_spec$make_initial_likelihood(
 
 
 
-
-# define RI-based mediation parameter
-tmle_params <- mediation_spec$make_params(tmle_task, initial_likelihood, options = "tc")
-
-# test estimate
-nontargeting <- tmle_params[[1]]$estimates(tmle_task)
-temp_lmed3_nontargeting <- nontargeting$psi
-temp_IC <- nontargeting$IC
-var_D <- var(temp_IC)
-n <- length(temp_IC)
-se <- sqrt(var_D / n)
-CI2 <- temp_lmed3_nontargeting + 1.96 * se
-CI1 <- temp_lmed3_nontargeting - 1.96 * se
-
-
-# test update
-n_subject <- nrow(tmle_task$data)
-tlik <- Targeted_Likelihood$new(initial_likelihood,
-                                submodel_type_by_node = "EIC" ,
-                                updater = list(convergence_type = "scaled_var",
-                                               constrain_step = T,
-                                               optim_delta_epsilon = F,  # fixed small step_size
-                                               one_dimensional=T,
-                                               delta_epsilon=function(x) {
-                                                 ifelse(abs(mean(x %>% as.vector)) < sqrt(var(x %>% as.vector)/n_subject)/log(n_subject),
-                                                        0,
-                                                        ifelse(mean(x %>% as.vector) > 0, 0.01, -0.01)
-                                                 )
-                                               },
-                                               maxit=100
-                                               ,
-                                               cvtmle=F
-                                ))
-tmle_params <- mediation_spec$make_params(tmle_task, tlik)
-# tmle_params[[1]]$estimates()$psi
-tmle_params[[1]]$clever_covariates()$IC %>% colMeans()
-suppressMessages(
-  tlik$updater$update(tlik, tmle_task)
-)
-suppressWarnings(suppressMessages(
-  new_est <- tmle_params[[1]]$estimates()$psi
-))
-tmle_params[[1]]$clever_covariates()$IC %>% colMeans()
-new_est
-
-onestep_test <- tmle_params[[1]]$estimates()
-onestep_test_est <- onestep_test$psi
-temp_IC <- onestep_test$IC
-var_D <- var(temp_IC)
-n <- length(temp_IC)
-se <- sqrt(var_D / n)
-CI2_onestep_test <- onestep_test_est + 1.96 * se
-CI1_onestep_test <- onestep_test_est - 1.96 * se
-
-rbind(c(temp_lmed3_nontargeting, CI1, CI2),
-      c(onestep_test_est, CI1_onestep_test, CI2_onestep_test)
+list(c(nontargeting_analytic$psi, CI1_no_an, CI2_no_an),
+     c(onestep_an_est, CI1_onestep_an, CI2_onestep_an),
+     c(nontargeting_re$psi, CI1_re, CI2_re),
+     c(new_psi, CI1_new, CI2_new)
 )

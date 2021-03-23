@@ -100,17 +100,24 @@ mediation_likelihood <- function(tmle_task, learner_list) {
 get_current_Q <- function(loc_node, which_Q,
                           tmle_task, obs_variable_names,
                           intervention_variables, intervention_levels_treat, intervention_levels_control,
-                          list_all_predicted_lkd
+                          list_all_predicted_lkd, if_survival = F
 ) {
   temp_node_names <- names(tmle_task$npsem)  # this has to be the obs task, but only the node names are needed
-  loc_A <- grep("A", temp_node_names)
-  loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-  loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
+  loc_delta <- grep("delta_", temp_node_names)
+  if (length(loc_delta) > 0) temp_node_names <- temp_node_names[-grep("delta_", temp_node_names)]  # remove delta nodes for wide format fitting
+  if (length(loc_delta) == 0) {  # no missingness node
+    loc_A <- grep("A", sapply(temp_node_names, function(x) substr(x, 1, 1)))
+  } else {
+    loc_A <- grep("A_E", temp_node_names)
+    loc_A_C <- grep("A_C", temp_node_names)
+  }
+  loc_Z <- which(sapply(temp_node_names, function(s) paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") == "Z"))
+  loc_RLY <- which(sapply(temp_node_names, function(s) !(paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") %in% c("A_C", "A_E", "A", "Z")) & tail(strsplit(s, "_")[[1]], 1) != 0))
   intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
 
   # ind_var is the order among variables
   ind_var <- loc_current_var <- which(obs_variable_names == tmle_task$npsem[[loc_node]]$variables)
-  # decide which Q to get
+  # decide which Q to get; this variable will be integrated out; note which_Q=1 just makes sure input include current variable
   ind_var <- ind_var + which_Q
 
   intervention_variables_loc_needed <- intervention_variables_loc[intervention_variables_loc < ind_var]
@@ -122,13 +129,28 @@ get_current_Q <- function(loc_node, which_Q,
     # get Q current
     if (ind_var <= length(obs_variable_names)) {  # Q_X, except for Q_R_tao+1
       data_temp <- df_to_update[1:(ind_var-1)]
-      # generate all possible 0, 1 valued rlz; set A to 0 first; set y_tau to always 1;
-      all_possible_rlz_1 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
-                                          A = 1,
-                                          rule_variables = c(last(obs_variable_names)), rule_values = c(1))
-      all_possible_rlz_0 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
-                                          A = 0,
-                                          rule_variables = c(last(obs_variable_names)), rule_values = c(1))
+
+      if (!if_survival) {  # regular outcome; just need non-zero last outcome node
+        # generate all possible 0, 1 valued rlz; set A to 0 first; set y_tau to always 1;
+        all_possible_rlz_1 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
+                                            A = 1,
+                                            rule_variables = c(last(obs_variable_names)), rule_values = c(1))
+        all_possible_rlz_0 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
+                                            A = 0,
+                                            rule_variables = c(last(obs_variable_names)), rule_values = c(1))
+      } else {  # for decreasing survival events, all Y and A_C need to be 1
+        loc_impute <- grep("Y_|A_C_", temp_node_names)  # remain alive and uncensored before current variable
+        # loc_impute <- loc_impute[loc_impute < loc_node]
+        all_possible_rlz_1 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
+                                             rule_variables = c(last(obs_variable_names),
+                                                                intervention_variables,
+                                                                sapply(loc_impute, function(s) tmle_task$npsem[[s]]$variables)),
+                                             rule_values = c(1, intervention_levels_treat, rep(1, length(loc_impute))))
+        all_possible_rlz_0 <- expand_values(obs_variable_names, to_drop = c(1:(ind_var-1) ),
+                                             rule_variables = c(last(obs_variable_names), intervention_variables, sapply(loc_impute, function(s) tmle_task$npsem[[s]]$variables)),
+                                             rule_values = c(1, intervention_levels_control, rep(1, length(loc_impute))))
+      }
+
       # for each observed L_0 vector, generate all needed combinations, one version for A = 1, one version for A = 0
       unique_input <- data_temp[1:(ind_var-1)] %>% unique
       library_output <- data.frame(unique_input, output =
@@ -166,6 +188,8 @@ get_current_Q <- function(loc_node, which_Q,
       Q_current <- df_to_update[, ind_var-1]  # Q_R_tao+1 is just the output
     }
 
+    # in case survival param create NA in Q integrals
+    Q_current[is.na(Q_current)] <- 0
     return(Q_current)
   } else {
     return(NULL)
@@ -180,9 +204,17 @@ get_current_H <- function(loc_node,
                           list_all_predicted_lkd
 ) {
   temp_node_names <- names(tmle_task$npsem)  # this has to be the obs task, but only the node names are needed
-  loc_A <- grep("A", temp_node_names)
-  loc_Z <- which(sapply(temp_node_names, function(s) strsplit(s, "_")[[1]][1] == "Z"))
-  loc_RLY <- which(sapply(temp_node_names, function(s) !(strsplit(s, "_")[[1]][1] %in% c("A", "Z")) & strsplit(s, "_")[[1]][2] != 0))
+  loc_delta <- grep("delta_", temp_node_names)
+  if (length(loc_delta) > 0) temp_node_names <- temp_node_names[-grep("delta_", temp_node_names)]  # remove delta nodes for wide format fitting
+
+  if (length(loc_delta) == 0) {  # no missingness node
+    loc_A <- grep("A", sapply(temp_node_names, function(x) substr(x, 1, 1)))
+  } else {
+    loc_A <- grep("A_E", temp_node_names)
+    loc_A_C <- grep("A_C", temp_node_names)
+  }
+  loc_Z <- which(sapply(temp_node_names, function(s) paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") == "Z"))
+  loc_RLY <- which(sapply(temp_node_names, function(s) !(paste0(head(strsplit(s, "_")[[1]], -1), collapse = "_") %in% c("A_C", "A_E", "A", "Z")) & tail(strsplit(s, "_")[[1]], 1) != 0))
   intervention_variables_loc <- map_dbl(intervention_variables, ~grep(.x, obs_variable_names))
 
   # ind_var is the order among variables
@@ -214,7 +246,15 @@ get_current_H <- function(loc_node,
 
       # these A probs will be taken as product
       part_A <- lapply(loc_A_needed, function(k) {
-        left_join(all_observed_1, list_all_predicted_lkd[[k]])$output
+        if (length(loc_delta) == 0) {  # no missingness, no censoring probs
+          left_join(all_observed_1, list_all_predicted_lkd[[k]])$output
+        } else {
+          temp_p_A_E <- left_join(all_observed_1, list_all_predicted_lkd[[k]])$output
+          k_A_C <- loc_A_C[loc_A_C < k]
+          k_A_C <- k_A_C[which.min(abs(k_A_C - k))]  # choose the closest censoring node
+          temp_p_A_C <- left_join(all_observed_1, list_all_predicted_lkd[[k_A_C]])$output
+          return(temp_p_A_C * temp_p_A_E)
+        }
       }) %>% pmap_dbl(prod)
 
       # these ratios Z probs will be taken as product
@@ -235,7 +275,15 @@ get_current_H <- function(loc_node,
 
       # these A probs will be taken as product
       part_A <- lapply(loc_A_needed, function(k) {
-        left_join(all_observed_0, list_all_predicted_lkd[[k]])$output
+        if (length(loc_delta) == 0) {  # no missingness, no censoring probs
+          left_join(all_observed_0, list_all_predicted_lkd[[k]])$output
+        } else {
+          temp_p_A_E <- left_join(all_observed_0, list_all_predicted_lkd[[k]])$output
+          k_A_C <- loc_A_C[loc_A_C < k]
+          k_A_C <- k_A_C[which.min(abs(k_A_C - k))]  # choose the closest censoring node
+          temp_p_A_C <- left_join(all_observed_0, list_all_predicted_lkd[[k_A_C]])$output
+          return(temp_p_A_C * temp_p_A_E)
+        }
       }) %>% pmap_dbl(prod)
 
       # these ratios Z probs will be taken as product
@@ -323,11 +371,19 @@ get_obs_Q_list <- function(tmle_task, obs_data,
       }
 
       # for each observed L_0 vector, generate all needed combinations, one version for A = 1, one version for A = 0
-      unique_input <- obs_data[, 1:(loc_var_last_not_integrated)] %>% unique
       if (!is.null(loc_var_A_C)) {
         loc_var_A_C_used <- loc_var_A_C[loc_var_A_C < loc_var_last_not_integrated]
-        unique_input[, loc_var_A_C_used] <- 1
+        if (!is.null(loc_var_A_C_used)) {
+          ind_full_observed <- apply(matrix(obs_data[, loc_var_A_C_used] == 1, ncol = length(loc_var_A_C_used)), 1, all)
+          ind_full_observed[is.na(ind_full_observed)] <- F
+          # T, NA usually means a death event happens; but we only care uncensored subjects in D cal with right-censoring
+        } else {
+          ind_full_observed <- rep(T, nrow(obs_data))
+        }
+      } else {
+        ind_full_observed <- rep(T, nrow(obs_data))
       }
+      unique_input <- obs_data[ind_full_observed, 1:(loc_var_last_not_integrated)] %>% unique
       library_output <- data.frame(unique_input, output =
                                      map_dbl(1:nrow(unique_input), function(which_row) {
                                        # probs in the integrals, A=1 or A=0 is inserted
@@ -353,7 +409,14 @@ get_obs_Q_list <- function(tmle_task, obs_data,
                                        pmap_dbl(temp_list, prod) %>% sum %>% return
                                      })
       )
-      temp_vec <- left_join(obs_data[, 1:(loc_current_var-1)], library_output)$output
+      if (any(is.na(last(library_output)))) {  # only reason to have NA here is Y=0
+        if (!all(library_output[is.na(last(library_output)), ncol(library_output)-1] == 0)) stop(
+          "list_all_predicted_lkd does not contain observed inputs for reasons other than Yt=0"
+        ) else {
+          library_output[is.na(last(library_output)), ncol(library_output)] <- 0  # zero prob for Yt=0
+        }
+      }
+      temp_vec <- left_join(obs_data[, 1:(loc_var_last_not_integrated)], library_output)$output
       temp_vec <- temp_vec[!is.na(temp_vec)]
       list_Q[[loc_node]] <- temp_vec
     }

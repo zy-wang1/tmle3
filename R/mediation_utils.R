@@ -37,7 +37,15 @@ expand_values <- function(variables, to_drop = NULL, values = NULL, rule_variabl
   all_possible_values <- map(variables_to_generate, function(eachVar) {
     test_rules <- which(map_dbl(rules_list, ~length(grep(eachVar, .x))) != 0)
     if (length(test_rules) == 0) return(0:1) else {
-      return(input_list[test_rules] %>% as.numeric)
+      if (length(test_rules) > 1) {
+        if (all(unlist(input_list[test_rules]) == input_list[test_rules][[1]])) {
+          return(input_list[test_rules][1] %>% as.numeric)
+        } else {
+          stop("Contradicting rules for expand_values. ")
+        }
+      } else {
+        return(input_list[test_rules] %>% as.numeric)
+      }
     }
   }) %>% expand.grid() %>% data.frame
   colnames(all_possible_values) <- variables_to_generate

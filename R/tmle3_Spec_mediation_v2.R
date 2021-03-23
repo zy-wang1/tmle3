@@ -76,7 +76,7 @@ tmle3_Spec_mediation <- R6Class(
         } else if (!if_projection) {
           param <- Param_mediation$new(likelihood, treatment, control)
         } else if (if_projection) {
-          param <- Param_middle_projection$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
+          param <- Param_mediation_projection$new(likelihood, treatment, control, static_likelihood, n_resampling)
         } else stop("Error: if_projection needs to be either True or False/NULL. ")
         return(param)
       })
@@ -120,7 +120,7 @@ tmle3_Spec_mediation <- R6Class(
         } else if (!if_projection) {
           param <- Param_mediation_survival$new(likelihood, treatment, control)
         } else if (if_projection) {
-          param <- Param_mediation_projection_survival$new(likelihood, treatment, control, outcome_node = last(temp_names), static_likelihood, n_resampling)
+          param <- Param_mediation_projection_survival$new(likelihood, treatment, control, static_likelihood, n_resampling)
         }
         return(param)
       })
