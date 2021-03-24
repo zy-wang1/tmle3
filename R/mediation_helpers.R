@@ -265,7 +265,7 @@ get_current_H <- function(loc_node,
                            }) %>% pmap_dbl(prod))
 
       H_current <- ifelse(
-        apply(data_temp[intervention_variables_loc_needed] == intervention_levels_treat, 1, prod) == 1  # this is the A_ind decided by the library tasks
+        apply(data_temp[intervention_variables_loc_needed] == intervention_levels_treat, 1, all)  # this is the A_ind decided by the library tasks
         , 1/part_A*part_Z, 0) %>% as.vector
     }
     # Z nodes
@@ -294,10 +294,11 @@ get_current_H <- function(loc_node,
 
       H_current <- ifelse(
         # ZW todo: stochastic intervention
-        apply(data_temp[intervention_variables_loc_needed] == intervention_levels_control, 1, prod) == 1
+        apply(data_temp[intervention_variables_loc_needed] == intervention_levels_control, 1, all)
         , 1/part_A*part_LR, 0)
     }
   }
+  H_current[H_current > 100] <- 100
   return(H_current)
 }
 
@@ -544,5 +545,13 @@ get_obs_H_list <- function(tmle_task, obs_data, current_likelihood,
     }
     list_H[[temp_ind]] <- temp_vec
   }
-  return(list_H)
+  # return(list_H)
+  list_H_bounded <- lapply(list_H, function(x) {
+    if (!is.null(x)) {
+      y <- x
+      y[y>100] <- 100
+      return(y)
+    }
+  })
+  return(list_H_bounded)
 }

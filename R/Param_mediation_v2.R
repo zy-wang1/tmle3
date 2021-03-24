@@ -760,6 +760,7 @@ Param_mediation_survival <- R6Class(
       loc_A <- grep("A", sapply(strsplit(temp_node_names, "_"), function(x) x[1]))  # A_E or A_C
       if_not_0 <- sapply(strsplit(temp_node_names, "_"), function(x) last(x) != 0)
       nodes_to_update <- temp_node_names[if_not_0 & !((1:length(temp_node_names)) %in% loc_A)]
+      # nodes_to_update <- rev(nodes_to_update)
       # nodes_to_update <- nodes_to_update[-length(nodes_to_update)]
       return(nodes_to_update)
     },
