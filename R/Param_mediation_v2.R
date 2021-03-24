@@ -402,7 +402,7 @@ Param_mediation_survival <- R6Class(
       private$.cf_likelihood_control <- CF_Likelihood$new(observed_likelihood, intervention_list_control)
       # observed_likelihood$get_likelihoods(observed_likelihood$training_task)
     },
-    clever_covariates = function(tmle_task = NULL, fold_number = "full", update = F, node = NULL, submodel_type = "EIC") {
+    clever_covariates = function(tmle_task = NULL, fold_number = "full", update = T, node = NULL, submodel_type = "EIC") {
       if (is.null(tmle_task)) {  # calculate for obs data task if not specified
         tmle_task <- self$observed_likelihood$training_task
       }
@@ -598,7 +598,7 @@ Param_mediation_survival <- R6Class(
 
       }
     },
-    estimates = function(tmle_task = NULL, fold_number = "full", update = F) {
+    estimates = function(tmle_task = NULL, fold_number = "full", update = T) {
       if (is.null(tmle_task)) {
         tmle_task <- self$observed_likelihood$training_task
       }

@@ -139,8 +139,8 @@ tmle3_Update <- R6Class(
           tmle_param$clever_covariates(fold_number = fold_number, update = T)
           tmle_param$estimates(fold_number = fold_number, update = T)
         } else if (inherits(tmle_params[[1]], "Param_mediation")) {
-          tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
-          tmle_param$estimates(fold_number = fold_number, update = T)
+          # tmle_param$clever_covariates(fold_number = fold_number, update = T, submodel_type = "EIC")
+          # tmle_param$estimates(fold_number = fold_number, update = T)
         }
       })
 
@@ -151,8 +151,8 @@ tmle3_Update <- R6Class(
             tmle_param$clever_covariates(fold_number = "full", update = T)
             tmle_param$estimates(fold_number = "full", update = T)
           } else if (inherits(tmle_params[[1]], "Param_mediation")) {
-            tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
-            tmle_param$estimates(fold_number = "full", update = T)
+            # tmle_param$clever_covariates(fold_number = "full", update = T, submodel_type = "EIC")
+            # tmle_param$estimates(fold_number = "full", update = T)
           }
         })
       }

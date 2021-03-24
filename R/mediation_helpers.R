@@ -298,7 +298,7 @@ get_current_H <- function(loc_node,
         , 1/part_A*part_LR, 0)
     }
   }
-  H_current[H_current > 100] <- 100
+  H_current[H_current > 50] <- 50
   return(H_current)
 }
 
@@ -549,7 +549,7 @@ get_obs_H_list <- function(tmle_task, obs_data, current_likelihood,
   list_H_bounded <- lapply(list_H, function(x) {
     if (!is.null(x)) {
       y <- x
-      y[y>100] <- 100
+      y[y>50] <- 50
       return(y)
     }
   })
